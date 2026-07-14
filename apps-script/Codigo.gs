@@ -85,7 +85,7 @@ function getLeads_(){
         fecha:String(get_(row,nm,A.created)||'').slice(0,16).replace('T',' '),
         nombre:nombre, apellido:apellido, correo:email, celular:phone,
         tipo_mueble: mc?String(row[mc-1]||'').trim():'',
-        campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').trim(),
+        campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').replace(/^[a-z]+:/i,'').trim(),
         asesor: String(get_(row,nm,A.asesor)||'').trim(),
         status: STATUSES.indexOf(st)>=0?st:'created' });
     }
