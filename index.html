@@ -150,6 +150,16 @@
   .tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
   .tag{font-size:.7rem;font-weight:700;background:var(--pink);color:var(--vio);padding:5px 12px;border-radius:20px}
   .tag.camp{background:#eef1fb;color:#4b4b8a}
+  .adprev{cursor:pointer;border:0;font:inherit;display:inline-flex;align-items:center;gap:4px}
+  .adprev:hover{filter:brightness(.96);text-decoration:underline}
+  .adprev svg{width:12px;height:12px;stroke:currentColor}
+  .asetag{margin-left:auto;align-self:flex-start;font-size:.68rem;font-weight:800;padding:3px 10px;border-radius:20px;background:#eceaf3;color:#666;white-space:nowrap}
+  .ase-Mili{background:#e7f0ff;color:#1f5fd0}
+  .ase-Oscar{background:#ffe9d6;color:#c05e00}
+  select.ase{appearance:none;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:800;font-size:.82rem;cursor:pointer;color:#3E2A9B;background:#faf8ff;font-family:inherit}
+  .fsep{display:inline-block;width:1px;height:18px;background:var(--line);margin:0 4px;vertical-align:middle}
+  .chip.chipa{font-weight:800}
+  .chip.chipa.on{background:#3E2A9B;color:#fff;border-color:#3E2A9B}
   .foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
   select.est{appearance:none;border:0;border-radius:12px;padding:10px 34px 10px 16px;font-weight:800;font-size:.9rem;cursor:pointer;color:#fff;text-transform:capitalize;font-family:inherit;background-repeat:no-repeat;background-position:right 11px center;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white'><path d='M2 4l4 4 4-4z'/></svg>");box-shadow:0 5px 14px rgba(0,0,0,.15)}
   .est[data-e=created]{background-color:var(--created)}.est[data-e=contacted]{background-color:var(--contacted)}.est[data-e=qualified]{background-color:var(--qualified)}.est[data-e=converted]{background-color:var(--converted)}.est[data-e=disqualified]{background-color:var(--disqualified)}
@@ -293,7 +303,7 @@
 <script>
   const STATUSES=['created','contacted','qualified','disqualified','converted'];
   const PRESETS=[['today','Hoy'],['yesterday','Ayer'],['last_7d','7 días'],['last_30d','30 días'],['maximum','Todo']];
-  let tipo='sofas', filtro='todos', preset='maximum', cache={sofas:[],camas:[],comedores:[]}, charts={};
+  let tipo='sofas', filtro='todos', asesorFiltro='todos', preset='maximum', cache={sofas:[],camas:[],comedores:[]}, charts={};
   const S=p=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+p+'</svg>';
   const IC={
     mail:S('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/>'),
@@ -453,9 +463,11 @@
   function deriveTipo(l){ const s=String(l.tipo_mueble||l.mueble||l.que_busca||l.tipo||'').toLowerCase(); if(/cama/.test(s)) return 'camas'; if(/comedor/.test(s)) return 'comedores'; if(/sof|sala/.test(s)) return 'sofas'; return 'sofas'; }
   function switchTab(t){ tipo=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tipo===t)); render(); }
   function setFiltro(e){ filtro=e; render(); }
+  function setAsesorFiltro(a){ asesorFiltro=a; render(); }
 
   function loadLeads(){
     gas({action:'leads'}).then(d=>{
+      window.ADVISORS=(d.advisors&&d.advisors.length)?d.advisors:['Mili','Oscar'];
       const all=(d.rows||[]).filter(l=>!isTest(l)).map(l=>Object.assign(l,{tipo:deriveTipo(l),celular:cleanPhone(l.celular||l.telefono||l.numero_de_telefono||l.phone_number||l.phone)}));
       cache.sofas=all.filter(l=>l.tipo==='sofas'); cache.camas=all.filter(l=>l.tipo==='camas'); cache.comedores=all.filter(l=>l.tipo==='comedores');
       document.getElementById('cnt-sofas').textContent=cache.sofas.length;
@@ -470,10 +482,13 @@
   }
 
   function render(){
-    document.getElementById('filtros').innerHTML=['todos'].concat(STATUSES).map(e=>'<button class="chip'+(filtro===e?' on':'')+'" onclick="setFiltro(\''+e+'\')">'+e+'</button>').join('');
+    const advs=(window.ADVISORS||['Mili','Oscar']);
+    document.getElementById('filtros').innerHTML=['todos'].concat(STATUSES).map(e=>'<button class="chip'+(filtro===e?' on':'')+'" onclick="setFiltro(\''+e+'\')">'+e+'</button>').join('')
+      +'<span class="fsep"></span>'+['todos'].concat(advs).map(a=>'<button class="chip chipa'+(asesorFiltro===a?' on':'')+'" onclick="setAsesorFiltro(\''+a+'\')">'+(a==='todos'?'Ambos':esc(a))+'</button>').join('');
     let rows=(cache[tipo]||[]).slice();
     const q=(document.getElementById('q').value||'').toLowerCase().trim();
     if(filtro!=='todos') rows=rows.filter(l=>(l.status||'created')===filtro);
+    if(asesorFiltro!=='todos') rows=rows.filter(l=>(l.asesor||'')===asesorFiltro);
     if(q) rows=rows.filter(l=>((l.nombre||'')+' '+(l.apellido||'')+' '+(l.correo||'')+' '+(l.empresa||'')).toLowerCase().includes(q));
     const c=document.getElementById('content');
     if(!rows.length){ c.innerHTML='<div class="state">'+IC.inbox+'Sin leads'+(filtro!=='todos'?' en "'+filtro+'"':'')+' en esta pestaña todavía.</div>'; return; }
@@ -487,12 +502,19 @@
     const wa=String(l.celular||'').replace(/[^0-9]/g,'');
     const mlab={sofas:'Sofás / Salas',camas:'Camas',comedores:'Comedores'}[l.tipo]||'';
     const opts=STATUSES.map(o=>'<option value="'+o+'"'+(o===e?' selected':'')+'>'+o+'</option>').join('');
+    const advs=(window.ADVISORS||['Mili','Oscar']);
+    const aopts=advs.map(o=>'<option'+(o===(l.asesor||'')?' selected':'')+'>'+esc(o)+'</option>').join('');
+    const anun=l.anuncio?(l.ad_id
+        ?'<button class="tag camp adprev" onclick="openPv(\''+esc(l.ad_id)+'\',\''+esc(l.anuncio)+'\')" title="Ver el anuncio de donde vino este lead">'+IC.eye+esc(l.anuncio)+'</button>'
+        :'<span class="tag camp">'+esc(l.anuncio)+'</span>'):'';
     return '<div class="lead" data-e="'+esc(e)+'">'
-      +'<div class="lhead"><div class="av">'+esc(ini)+'</div><div><h3>'+esc(nombre)+'</h3><div class="meta">'+esc(l.fecha||'')+'</div></div></div>'
+      +'<div class="lhead"><div class="av">'+esc(ini)+'</div><div><h3>'+esc(nombre)+'</h3><div class="meta">'+esc(l.fecha||'')+'</div></div><span class="asetag ase-'+esc(l.asesor||'')+'">'+esc(l.asesor||'')+'</span></div>'
       +(l.correo?'<div class="row">'+IC.mail+'<a href="mailto:'+esc(l.correo)+'">'+esc(l.correo)+'</a></div>':'')
       +(l.celular?'<div class="row">'+IC.phone+'<a href="https://wa.me/'+wa+'" target="_blank" rel="noopener">'+esc(l.celular)+'</a></div>':'')
-      +'<div class="tags">'+(mlab?'<span class="tag" style="background:#fff1e2;color:#c05e00;font-weight:700">'+mlab+'</span>':'')+(l.empresa?'<span class="tag">'+esc(l.empresa)+'</span>':'')+(l.anuncio?'<span class="tag camp">'+esc(l.anuncio)+'</span>':'')+'</div>'
-      +'<div class="foot"><select class="est" data-e="'+esc(e)+'" onchange="chg(this,\''+esc(l.id)+'\')">'+opts+'</select><span class="save" id="sv-'+esc(l.id)+'"></span></div>'
+      +'<div class="tags">'+(mlab?'<span class="tag" style="background:#fff1e2;color:#c05e00;font-weight:700">'+mlab+'</span>':'')+(l.empresa?'<span class="tag">'+esc(l.empresa)+'</span>':'')+anun+'</div>'
+      +'<div class="foot"><select class="est" data-e="'+esc(e)+'" onchange="chg(this,\''+esc(l.id)+'\')">'+opts+'</select>'
+      +'<select class="ase" title="Asesor asignado" onchange="assign(this,\''+esc(l.id)+'\')">'+aopts+'</select>'
+      +'<span class="save" id="sv-'+esc(l.id)+'"></span></div>'
       +(l.capi?'<div class="capi">'+IC.send+esc(l.capi)+'</div>':'')
       +'</div>';
   }
@@ -507,6 +529,16 @@
       if(r.ok){ sv.className='save show ok'; sv.textContent=r.capi?'Guardado · enviado a Meta':'Guardado'; setTimeout(()=>sv.classList.remove('show'),2800); }
       else throw new Error(r.error||'error');
     }).catch(err=>{ sv.className='save show err'; sv.textContent='Error: '+esc(err.message); });
+  }
+
+  function assign(sel,id){
+    const val=sel.value, sv=document.getElementById('sv-'+id);
+    const l=(cache[tipo]||[]).find(x=>String(x.id)===String(id)); if(l) l.asesor=val;
+    const cardEl=sel.closest('.lead'), tag=cardEl&&cardEl.querySelector('.asetag');
+    if(tag){ tag.textContent=val; tag.className='asetag ase-'+val; }
+    if(sv){ sv.className='save show'; sv.textContent='Asignado a '+val; setTimeout(()=>sv.classList.remove('show'),2200); }
+    gas({action:'assign',id:id,asesor:val}).catch(()=>{});
+    if(asesorFiltro!=='todos'&&val!==asesorFiltro){ if(cardEl) cardEl.remove(); }
   }
 
   /* ============ PREVIEW DE ANUNCIO ============ */

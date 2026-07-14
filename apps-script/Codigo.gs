@@ -10,6 +10,8 @@ const DATASET_ID = '';                       // Fefa NO tiene píxel/dataset -> 
 const STATUSES   = ['created','contacted','qualified','disqualified','converted'];
 const CAPI_STAGES= ['contacted','qualified','disqualified','converted'];
 const STATUS_DEFAULT = 'lead_status';
+const ASESOR_DEFAULT = 'asesor';
+const ADVISORS   = ['Mili','Oscar'];   // los 2 asesores; los leads se reparten 50/50 y se pueden reasignar
 
 // alias de columnas (se comparan normalizados: minúsculas, sin acentos, _)
 const A = {
@@ -21,8 +23,10 @@ const A = {
   email:   ['email','correo','correo_electronico','e_mail'],
   phone:   ['phone_number','numero_de_telefono','telefono','celular','phone','numero_de_celular','whatsapp'],
   campaign:['campaign_name','nombre_de_la_campana','campana','campaign'],
+  ad_id:   ['ad_id','id_del_anuncio','adid'],
   ad:      ['ad_name','nombre_del_anuncio','anuncio','ad'],
-  status:  ['lead_status','status','estado','lead_estado']
+  status:  ['lead_status','status','estado','lead_estado'],
+  asesor:  ['asesor','advisor','vendedor','assigned','asignado']
 };
 
 function META_TOKEN(){ return PropertiesService.getScriptProperties().getProperty('META_TOKEN') || ''; }
@@ -43,9 +47,13 @@ function setup(){
     let sc=col_(nm,A.status);
     if(!sc){ sh.getRange(1,sh.getLastColumn()+1).setValue(STATUS_DEFAULT); sc=sh.getLastColumn(); }
     const rule=SpreadsheetApp.newDataValidation().requireValueInList(STATUSES,true).build();
-    sh.getRange(2,sc,Math.max(1,sh.getMaxRows()-1),1).setDataValidation(rule); n++;
+    sh.getRange(2,sc,Math.max(1,sh.getMaxRows()-1),1).setDataValidation(rule);
+    let ac=col_(nm,A.asesor);
+    if(!ac){ sh.getRange(1,sh.getLastColumn()+1).setValue(ASESOR_DEFAULT); ac=sh.getLastColumn(); }
+    const rule2=SpreadsheetApp.newDataValidation().requireValueInList(ADVISORS,true).build();
+    sh.getRange(2,ac,Math.max(1,sh.getMaxRows()-1),1).setDataValidation(rule2); n++;
   });
-  return 'Listo en '+n+' hoja(s), estados: '+STATUSES.join(' / ');
+  return 'Listo en '+n+' hoja(s) · estados: '+STATUSES.join('/')+' · asesores: '+ADVISORS.join('/');
 }
 
 function doGet(e){
@@ -53,6 +61,7 @@ function doGet(e){
   if(p.key!==KEY) return out_(p.callback,{error:'unauthorized'});
   try{
     if(p.action==='update')  return out_(p.callback, updateLead_(p.id,p.status));
+    if(p.action==='assign')  return out_(p.callback, setAsesor_(p.id,p.asesor));
     if(p.action==='metrics') return out_(p.callback, getMetrics_());
     return out_(p.callback, getLeads_());   // action 'leads' o vacío
   }catch(err){ return out_(p.callback,{error:String(err)}); }
@@ -76,11 +85,15 @@ function getLeads_(){
         fecha:String(get_(row,nm,A.created)||'').slice(0,16).replace('T',' '),
         nombre:nombre, apellido:apellido, correo:email, celular:phone,
         tipo_mueble: mc?String(row[mc-1]||'').trim():'',
-        campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad),
+        campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').trim(),
+        asesor: String(get_(row,nm,A.asesor)||'').trim(),
         status: STATUSES.indexOf(st)>=0?st:'created' });
     }
   });
-  return {rows:rows,statuses:STATUSES,ts:new Date().toLocaleString('es-PA')};
+  // reparto 50/50 entre asesores: por orden de llegada (fecha), salvo los ya asignados a mano
+  rows.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  rows.forEach((l,i)=>{ if(ADVISORS.indexOf(l.asesor)<0) l.asesor=ADVISORS[i%ADVISORS.length]; });
+  return {rows:rows,statuses:STATUSES,advisors:ADVISORS,ts:new Date().toLocaleString('es-PA')};
 }
 
 function updateLead_(id,status){
@@ -102,6 +115,22 @@ function updateLead_(id,status){
         }
         return {ok:true,status:status,capi:capi};
       }
+    }
+  }
+  return {ok:false,error:'lead no encontrado'};
+}
+
+// Reasignar un lead a un asesor (Mili/Oscar); escribe en la columna 'asesor' (la crea si falta)
+function setAsesor_(id,asesor){
+  asesor=String(asesor||'').trim();
+  if(ADVISORS.indexOf(asesor)<0) return {ok:false,error:'asesor invalido'};
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  for(const sh of ss.getSheets()){
+    if(sh.getLastRow()<2) continue; const nm=nmap_(sh); const idc=col_(nm,A.id); if(!idc) continue;
+    let ac=col_(nm,A.asesor); if(!ac){ sh.getRange(1,sh.getLastColumn()+1).setValue(ASESOR_DEFAULT); ac=sh.getLastColumn(); }
+    const ids=sh.getRange(2,idc,Math.max(1,sh.getLastRow()-1),1).getValues();
+    for(let i=0;i<ids.length;i++){
+      if(String(ids[i][0])===String(id)){ sh.getRange(i+2,ac).setValue(asesor); return {ok:true,asesor:asesor}; }
     }
   }
   return {ok:false,error:'lead no encontrado'};
