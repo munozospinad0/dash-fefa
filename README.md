@@ -1,52 +1,44 @@
-# 🔥 Dashboard de Leads · modu.mon
+# Dashboard · Mueblería Compra con Fefa
 
-Dashboard web (Vercel) donde modu.mon ve sus leads **en tiempo real**, separados en **🏠 Hogar (B2C)** y **🏢 Proyectos (B2B)**, y **cambia el estado** de cada uno. Al marcar **Calificado** o **Ganado**, el sistema **avisa a Meta** (Conversions API) para que optimice las campañas hacia leads de calidad.
+CRM en tiempo real de los leads de Meta (formulario) + panel de métricas de campañas.
+**LIVE:** https://dash-fefa.vercel.app · contraseña: `fefa2026`
 
+## Cómo fluye un lead
 ```
-Meta Lead Ads → (integración nativa Google Sheets) → Hoja "Leads Modumon"
-                                   ▲                          │
-        Dashboard (Vercel) ───────┘   Apps Script (API + CAPI)◄┘
-        lee/actualiza vía JSONP        lee hoja · escribe estado · manda CAPI
+Anuncio Meta (formulario) → Google Sheet "Leads Compra con Fefa"
+   → Apps Script (apps-script/Codigo.gs, Web App)
+   → /api/leads (proxy Vercel)  → dashboard
 ```
+El anuncio ya viene con nombre-slug (`fefa_leads_sofa_img_jul26`), así cada lead muestra **de qué anuncio/mueble vino** + su **preview real**.
 
-## Arquitectura
-| Pieza | Rol |
+## Funciones
+- **CRM por tipo de mueble** (Sofás/Salas · Camas · Comedores) — deriva del campo `tipo_mueble`.
+- **Preview del anuncio por lead** (clic en el nombre del anuncio → render real desde Meta).
+- **Reparto 50/50 entre los 2 asesores (Mili / Oscar)** por orden de llegada, reasignable + filtro por asesor.
+- **Estados del lead** (created → contacted → qualified → converted / disqualified), se guardan en el Sheet.
+- **Métricas** (gasto, leads, CPL, CTR, audiencia) — **solo de nuestras campañas** (`filtering: campaign.name CONTAIN "Fefa"`), ignora las viejas del cliente.
+
+## Variables de entorno (Vercel · proyecto dash-fefa)
+| Variable | Valor |
 |---|---|
-| **Google Sheet "Leads Modumon"** | Base de datos (la llena Meta automático) |
-| **Apps Script** (`apps-script/Codigo.gs`) | API: entrega leads, guarda estado, dispara CAPI |
-| **Dashboard** (`index.html`) | La interfaz en Vercel (leer + actualizar estado) |
+| `DASHBOARD_PASSWORD` | `fefa2026` |
+| `APPS_SCRIPT_URL` | URL `/exec` del Web App de Apps Script |
+| `APPS_SCRIPT_KEY` | `fefa2026` (debe coincidir con `KEY` en Codigo.gs) |
+| `META_TOKEN` | token de la cuenta de Fefa (solo para métricas) |
+| `META_ACCOUNT_ID` | `act_1795776247808784` |
+| `META_API_VERSION` | `v25.0` |
 
----
+## Apps Script (una sola vez)
+1. En el Google Sheet → **Extensiones → Apps Script** → pegar `apps-script/Codigo.gs`.
+2. Ejecutar la función **`setup`** (crea columnas `lead_status` y `asesor` con dropdowns).
+3. **Implementar → App web** (*Ejecutar como:* Yo · *Acceso:* Cualquiera) → copiar la URL `/exec` → ponerla en `APPS_SCRIPT_URL` en Vercel.
 
-## Parte A · Backend (Apps Script) — 5 min
-1. Abre la Google Sheet **"Leads Modumon"** → **Extensiones → Apps Script**.
-2. Pega el contenido de **`apps-script/Codigo.gs`** en `Código.gs`. Guarda.
-3. ⚙️ **Project Settings → Script properties → Add**: `META_TOKEN` = *(el token de Meta, el mismo de `.meta/modumon.env`)*.
-4. Corre la función **`setup`** una vez (Run → autoriza) → agrega columnas `estado`, `capi`, `actualizado`.
-5. **Deploy → New deployment → Web app**:
-   - Execute as: **Me** · Who has access: **Anyone**
-   - **Deploy** → copia la **URL /exec**.
+## Desplegar
+El auto-deploy desde GitHub **no está activo**. Para publicar cambios:
+```bash
+vercel deploy --prod --yes --token=<TOKEN_VERCEL>
+```
+(o reconectar el repo en Vercel → Settings → Git para auto-deploy).
 
-## Parte B · Frontend (Vercel) — 3 min
-1. En **`config.js`** pega la URL del paso A.5 en `API` (y deja `KEY` igual a la del `Codigo.gs`).
-2. Sube este repo a GitHub *(ya está)* y en **vercel.com** → **Add New → Project → Import** este repo → **Deploy**.
-   - No necesita build: es estático (index.html). Vercel lo detecta solo.
-3. Abre la URL de Vercel → ¡ahí está el dashboard! Compártela con modu.mon.
-
-## Cómo lo usan
-Abren la URL → pestaña **Hogar** o **Proyectos** → por cada lead cambian el **Estado**
-(Nuevo → Contactado → **Calificado** → **Ganado**/Perdido). Al poner *Calificado/Ganado* se guarda
-en la hoja **y** se manda a Meta (lo ves en `📡` de la tarjeta).
-
-## Mapeo estado → evento a Meta
-| Estado | ¿Va a Meta? | event_name |
-|---|---|---|
-| Nuevo / Contactado / Perdido | No (interno) | — |
-| **Calificado** | Sí | `QualifiedLead` |
-| **Ganado** | Sí | `WonLead` |
-
-Luego en **Events Manager** (dataset `1472599984909735`) activas la optimización **"Conversion Leads"** y mapeas esos eventos como etapas del embudo. 🎯
-
-## Seguridad
-- El `KEY` en la URL evita accesos casuales. Cámbialo en `Codigo.gs` **y** `config.js` (que sean iguales).
-- El token de Meta vive en **Script Properties** (no en el código ni en el repo).
+## Stack
+HTML estático + Chart.js · 2 funciones serverless en Vercel (`api/leads.js` proxy al Apps Script, `api/insights.js` proxy a la Meta Marketing API) · Apps Script sobre Google Sheet.
