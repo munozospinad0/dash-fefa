@@ -47,8 +47,10 @@ module.exports = async function handler(req, res) {
   if (daily) dateParam += '&time_increment=1';
 
   const bd = (breakdowns && /^[a-z_,]+$/.test(breakdowns)) ? `&breakdowns=${breakdowns}` : '';
+  // Contar SOLO nuestras campañas (empiezan con "Fefa | ..."), no las 3 viejas del cliente.
+  const ours = encodeURIComponent(JSON.stringify([{ field: 'campaign.name', operator: 'CONTAIN', value: 'Fefa' }]));
   const url = `https://graph.facebook.com/${API_VERSION}/${ACCOUNT}/insights?level=${level}` +
-    `&fields=${FIELDS[level]}${dateParam}${bd}&limit=500&access_token=${TOKEN}`;
+    `&fields=${FIELDS[level]}${dateParam}${bd}&filtering=${ours}&limit=500&access_token=${TOKEN}`;
 
   try {
     const r = await fetch(url);
