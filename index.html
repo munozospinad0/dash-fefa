@@ -344,8 +344,8 @@
     localStorage.setItem('mm_pass',p); hideLogin(); loadAll(false);
   }
 
-  async function api(q){ const r=await fetch('/api/insights?'+q+'&password='+encodeURIComponent(PWD())); if(r.status===401){ showLogin(false); throw new Error('Acceso requerido'); } const j=await r.json(); if(j.error) throw new Error(j.error); return j.data||[]; }
-  async function gas(params){ const qs=new URLSearchParams(Object.assign({password:PWD()},params)); qs.set('_',String(Date.now())); const r=await fetch('/api/leads?'+qs.toString(),{cache:'no-store'}); if(r.status===401){ showLogin(false); throw new Error('Acceso requerido'); } const j=await r.json(); if(j.error) throw new Error(j.error); return j; }
+  async function api(q){ let le; for(let i=0;i<3;i++){ if(i) await new Promise(r=>setTimeout(r,1200*i)); try{ const r=await fetch('/api/insights?'+q+'&password='+encodeURIComponent(PWD())); if(r.status===401){ showLogin(false); throw new Error('Acceso requerido'); } const j=await r.json(); if(j.error) throw new Error(j.error); return j.data||[]; }catch(e){ le=e; if(String(e.message).indexOf('Acceso')>=0) throw e; } } throw le; }
+  async function gas(params){ let le; for(let i=0;i<3;i++){ if(i) await new Promise(r=>setTimeout(r,1200*i)); try{ const qs=new URLSearchParams(Object.assign({password:PWD()},params)); qs.set('_',String(Date.now())); const r=await fetch('/api/leads?'+qs.toString(),{cache:'no-store'}); if(r.status===401){ showLogin(false); throw new Error('Acceso requerido'); } const j=await r.json(); if(j.error) throw new Error(j.error); return j; }catch(e){ le=e; if(String(e.message).indexOf('Acceso')>=0) throw e; } } throw le; }
   function mkChart(id,cfg){ if(charts[id]) charts[id].destroy(); charts[id]=new Chart(document.getElementById(id),cfg); }
 
   function loadMetrics(){
