@@ -17,15 +17,19 @@ module.exports = async function handler(req, res) {
   if (action === 'update') { params.set('action', 'update'); params.set('id', id); params.set('status', status); }
   else if (action === 'assign') { params.set('action', 'assign'); params.set('id', id); params.set('asesor', asesor); }
 
-  try {
-    const r = await fetch(GAS_URL + '?' + params.toString(), { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (dash-modumon)' } });
-    const text = await r.text();
-    let j; try { j = JSON.parse(text); } catch { return res.status(502).json({ error: 'Respuesta inválida del Apps Script', status: r.status, ct: r.headers.get('content-type'), snippet: text.slice(0, 160) }); }
-    // Nunca cachear: el estado de los leads cambia en vivo y una foto vieja hacía que
-    // al recargar el lead marcado "contactado" reapareciera en gris.
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    return res.status(200).json(j);
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+  // Reintenta: el Web App de Apps Script a veces devuelve HTML transitorio (arranque en frío / redirect)
+  let lastInfo = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 500 * attempt));
+    try {
+      const r = await fetch(GAS_URL + '?' + params.toString(), { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (dash-fefa)' } });
+      const text = await r.text();
+      try {
+        const j = JSON.parse(text);
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        return res.status(200).json(j);
+      } catch { lastInfo = { error: 'Respuesta inválida del Apps Script', status: r.status, ct: r.headers.get('content-type'), snippet: text.slice(0, 160) }; }
+    } catch (e) { lastInfo = { error: e.message }; }
   }
+  return res.status(502).json(lastInfo || { error: 'Apps Script no respondió' });
 };
