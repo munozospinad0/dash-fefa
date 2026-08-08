@@ -12,11 +12,11 @@ module.exports = async function handler(req, res) {
   if (PASSWORD && provided !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
   if (!GAS_URL || !GAS_KEY) return res.status(500).json({ error: 'Falta APPS_SCRIPT_URL / APPS_SCRIPT_KEY en Vercel' });
 
-  const { action = 'leads', id = '', status = '', asesor = '', monto = '' } = req.query;
+  const { action = 'leads', id = '', status = '', asesor = '', monto = '', producto = '' } = req.query;
   const params = new URLSearchParams({ key: GAS_KEY });
   if (action === 'update') { params.set('action', 'update'); params.set('id', id); params.set('status', status); }
   else if (action === 'assign') { params.set('action', 'assign'); params.set('id', id); params.set('asesor', asesor); }
-  else if (action === 'venta') { params.set('action', 'venta'); params.set('id', id); params.set('monto', monto); }
+  else if (action === 'venta') { params.set('action', 'venta'); params.set('id', id); params.set('monto', monto); params.set('producto', producto); }
 
   // Reintenta: el Web App de Apps Script a veces devuelve HTML transitorio (arranque en frío / redirect)
   let lastInfo = null;

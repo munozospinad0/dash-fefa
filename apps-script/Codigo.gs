@@ -9,9 +9,24 @@ const KEY        = 'fefa2026';               // = APPS_SCRIPT_KEY en Vercel
 const DATASET_ID = '1965221274196004';       // conjunto de datos de Fefa (CAPI: eventos de calidad al marcar en el dash)
 const STATUSES   = ['created','contacted','qualified','disqualified','converted'];
 const CAPI_STAGES= ['contacted','qualified','disqualified','converted'];
+
+/* Cómo se llama cada etapa DENTRO de Meta.
+   'Contact' y 'Purchase' son eventos ESTÁNDAR: Meta los entiende de fábrica, salen en
+   el Administrador de eventos con su propia tarjeta y permiten pujar por VALOR.
+   El de calificado va personalizado porque Meta no tiene un estándar para
+   "lead que al vendedor le sirvió" — ese es el patrón de conversion leads.
+   Para cambiarlos, se toca SOLO esta tabla. */
+const EVENT_MAP = {
+  contacted:    'Contact',
+  qualified:    'Lead_Calificado',
+  disqualified: 'Lead_Descalificado',
+  converted:    'Purchase'
+};
+function metaEvent_(status){ return EVENT_MAP[status] || status; }
 const STATUS_DEFAULT = 'lead_status';
 const ASESOR_DEFAULT = 'asesor';
 const MONTO_DEFAULT  = 'monto_venta';   // cuánto se vendió; lo escribe el vendedor desde el dashboard
+const PRODUCTO_DEFAULT = 'producto_venta'; // qué producto compró; lo escribe el vendedor desde el dashboard
 const ADVISORS   = ['Mili','Oscar'];   // los 2 asesores; los leads se reparten 50/50 y se pueden reasignar
 
 // alias de columnas (se comparan normalizados: minúsculas, sin acentos, _)
@@ -22,13 +37,14 @@ const A = {
   first:   ['first_name','nombre','nombres'],
   last:    ['last_name','apellido','apellidos'],
   email:   ['email','correo','correo_electronico','e_mail'],
-  phone:   ['phone_number','numero_de_telefono','telefono','celular','phone','numero_de_celular','whatsapp'],
+  phone:   ['phone_number','numero_de_telefono','telefono','celular','phone','numero_de_celular','whatsapp','numero_de_whatsapp','whatsapp_number','num_whatsapp'],
   campaign:['campaign_name','nombre_de_la_campana','campana','campaign'],
   ad_id:   ['ad_id','id_del_anuncio','adid'],
   ad:      ['ad_name','nombre_del_anuncio','anuncio','ad'],
   status:  ['lead_status','status','estado','lead_estado'],
   asesor:  ['asesor','advisor','vendedor','assigned','asignado'],
-  monto:   ['monto_venta','monto','valor_venta','venta','valor','importe','total','monto_de_venta']
+  monto:   ['monto_venta','monto','valor_venta','venta','valor','importe','total','monto_de_venta'],
+  producto:['producto_venta','producto','producto_vendido','que_compro','articulo','producto_comprado']
 };
 
 function META_TOKEN(){ return PropertiesService.getScriptProperties().getProperty('META_TOKEN') || ''; }
@@ -64,7 +80,7 @@ function doGet(e){
   try{
     if(p.action==='update')  return out_(p.callback, updateLead_(p.id,p.status));
     if(p.action==='assign')  return out_(p.callback, setAsesor_(p.id,p.asesor));
-    if(p.action==='venta')   return out_(p.callback, setMonto_(p.id,p.monto));
+    if(p.action==='venta')   return out_(p.callback, setMonto_(p.id,p.monto,p.producto));
     if(p.action==='metrics') return out_(p.callback, getMetrics_());
     return out_(p.callback, getLeads_());   // action 'leads' o vacío
   }catch(err){ return out_(p.callback,{error:String(err)}); }
@@ -91,6 +107,7 @@ function getLeads_(){
         campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').replace(/^[a-z]+:/i,'').trim(),
         asesor: String(get_(row,nm,A.asesor)||'').trim(),
         monto: Number(String(get_(row,nm,A.monto)||'').replace(/[^0-9.\-]/g,''))||0,
+        producto: String(get_(row,nm,A.producto)||'').trim(),
         status: STATUSES.indexOf(st)>=0?st:'created' });
     }
   });
@@ -126,18 +143,21 @@ function updateLead_(id,status){
 
 // Registrar CUÁNTO se vendió a ese lead; escribe en la columna 'monto_venta' (la crea si falta).
 // Es lo que permite saber qué anuncio trajo dinero, no solo cuál trajo formularios.
-function setMonto_(id,monto){
+function setMonto_(id,monto,producto){
   const v=Number(String(monto==null?'':monto).replace(/[^0-9.\-]/g,''));
   if(!isFinite(v)||v<0) return {ok:false,error:'monto invalido'};
+  const prod=String(producto==null?'':producto).trim();
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   for(const sh of ss.getSheets()){
     if(sh.getLastRow()<2) continue; const nm=nmap_(sh); const idc=col_(nm,A.id); if(!idc) continue;
     let mc=col_(nm,A.monto); if(!mc){ sh.getRange(1,sh.getLastColumn()+1).setValue(MONTO_DEFAULT); mc=sh.getLastColumn(); }
+    let pc=col_(nm,A.producto); if(!pc){ sh.getRange(1,sh.getLastColumn()+1).setValue(PRODUCTO_DEFAULT); pc=sh.getLastColumn(); }
     const ids=sh.getRange(2,idc,Math.max(1,sh.getLastRow()-1),1).getValues();
     for(let i=0;i<ids.length;i++){
       if(String(ids[i][0])===String(id)){
         const row=i+2;
         sh.getRange(row,mc).setValue(v);
+        if(pc) sh.getRange(row,pc).setValue(v>0?prod:'');   // qué producto se vendió (vacío si se borra el monto)
         // registrar una venta implica que el lead se convirtió: se sube el estado solo
         let sc=col_(nm,A.status);
         if(v>0 && sc) sh.getRange(row,sc).setValue('converted');
@@ -148,7 +168,7 @@ function setMonto_(id,monto){
           const res=sendCapi_('converted',{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:get_(full,nm,A.phone),monto:v});
           capi='converted '+money_(v)+(res.ok?' - enviado a Meta':' - error '+res.code);
         }
-        return {ok:true,monto:v,status:v>0?'converted':undefined,capi:capi};
+        return {ok:true,monto:v,producto:v>0?prod:'',status:v>0?'converted':undefined,capi:capi};
       }
     }
   }
@@ -193,6 +213,7 @@ function getMetrics_(){
 function sendCapi_(eventName,lead){
   if(!DATASET_ID) return {ok:false,code:'sin_dataset'};
   const token=META_TOKEN(); if(!token) return {ok:false,code:'sin_token'};
+  eventName=metaEvent_(eventName);   // etapa interna -> nombre que ve Meta
   const ud={}; const lid=String(lead.lead_id||'').replace(/[^0-9]/g,''); if(lid) ud.lead_id=Number(lid);
   if(lead.email) ud.em=[sha256_(String(lead.email).trim().toLowerCase())];
   if(lead.phone){ const p=String(lead.phone).replace(/[^0-9]/g,''); if(p) ud.ph=[sha256_(p)]; }
