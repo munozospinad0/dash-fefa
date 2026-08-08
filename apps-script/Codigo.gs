@@ -141,7 +141,14 @@ function setMonto_(id,monto){
         // registrar una venta implica que el lead se convirtió: se sube el estado solo
         let sc=col_(nm,A.status);
         if(v>0 && sc) sh.getRange(row,sc).setValue('converted');
-        return {ok:true,monto:v,status:v>0?'converted':undefined};
+        // y se le avisa a Meta CON el valor, para que pueda optimizar por dinero
+        let capi='';
+        if(v>0 && DATASET_ID){
+          const full=sh.getRange(row,1,1,sh.getLastColumn()).getValues()[0];
+          const res=sendCapi_('converted',{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:get_(full,nm,A.phone),monto:v});
+          capi='converted '+money_(v)+(res.ok?' - enviado a Meta':' - error '+res.code);
+        }
+        return {ok:true,monto:v,status:v>0?'converted':undefined,capi:capi};
       }
     }
   }
@@ -189,11 +196,16 @@ function sendCapi_(eventName,lead){
   const ud={}; const lid=String(lead.lead_id||'').replace(/[^0-9]/g,''); if(lid) ud.lead_id=Number(lid);
   if(lead.email) ud.em=[sha256_(String(lead.email).trim().toLowerCase())];
   if(lead.phone){ const p=String(lead.phone).replace(/[^0-9]/g,''); if(p) ud.ph=[sha256_(p)]; }
-  const evt={event_name:eventName,event_time:Math.floor(Date.now()/1000),action_source:'system_generated',event_id:'fefa-'+lid+'-'+eventName+'-'+Date.now(),user_data:ud,custom_data:{event_source:'crm'}};
+  // Con el monto de venta, Meta puede optimizar por VALOR y no solo por conteo.
+  const cd={event_source:'crm'};
+  const val=Number(lead.monto)||0;
+  if(val>0){ cd.value=val; cd.currency='USD'; }
+  const evt={event_name:eventName,event_time:Math.floor(Date.now()/1000),action_source:'system_generated',event_id:'fefa-'+lid+'-'+eventName+'-'+Date.now(),user_data:ud,custom_data:cd};
   const url='https://graph.facebook.com/'+API_VER+'/'+DATASET_ID+'/events?access_token='+encodeURIComponent(token);
   const resp=UrlFetchApp.fetch(url,{method:'post',contentType:'application/json',payload:JSON.stringify({data:[evt]}),muteHttpExceptions:true});
   const code=resp.getResponseCode(); return {ok:code>=200&&code<300,code:code};
 }
 
+function money_(v){ return '$'+Number(v||0).toFixed(2).replace(/\.00$/,''); }
 function sha256_(s){ const b=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8); return b.map(x=>('0'+(x&0xFF).toString(16)).slice(-2)).join(''); }
 function out_(cb,obj){ const j=JSON.stringify(obj); return cb?ContentService.createTextOutput(cb+'('+j+')').setMimeType(ContentService.MimeType.JAVASCRIPT):ContentService.createTextOutput(j).setMimeType(ContentService.MimeType.JSON); }
