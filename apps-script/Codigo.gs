@@ -6,7 +6,7 @@
 const AD_ACCOUNT = 'act_1795776247808784';   // cuenta de Fefa
 const API_VER    = 'v25.0';
 const KEY        = 'fefa2026';               // = APPS_SCRIPT_KEY en Vercel
-const DATASET_ID = '';                       // Fefa NO tiene píxel/dataset -> sin CAPI (solo se guarda el estado)
+const DATASET_ID = '1965221274196004';       // conjunto de datos de Fefa (CAPI: eventos de calidad al marcar en el dash)
 const STATUSES   = ['created','contacted','qualified','disqualified','converted'];
 const CAPI_STAGES= ['contacted','qualified','disqualified','converted'];
 const STATUS_DEFAULT = 'lead_status';
