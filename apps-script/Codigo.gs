@@ -11,6 +11,7 @@ const STATUSES   = ['created','contacted','qualified','disqualified','converted'
 const CAPI_STAGES= ['contacted','qualified','disqualified','converted'];
 const STATUS_DEFAULT = 'lead_status';
 const ASESOR_DEFAULT = 'asesor';
+const MONTO_DEFAULT  = 'monto_venta';   // cuánto se vendió; lo escribe el vendedor desde el dashboard
 const ADVISORS   = ['Mili','Oscar'];   // los 2 asesores; los leads se reparten 50/50 y se pueden reasignar
 
 // alias de columnas (se comparan normalizados: minúsculas, sin acentos, _)
@@ -26,7 +27,8 @@ const A = {
   ad_id:   ['ad_id','id_del_anuncio','adid'],
   ad:      ['ad_name','nombre_del_anuncio','anuncio','ad'],
   status:  ['lead_status','status','estado','lead_estado'],
-  asesor:  ['asesor','advisor','vendedor','assigned','asignado']
+  asesor:  ['asesor','advisor','vendedor','assigned','asignado'],
+  monto:   ['monto_venta','monto','valor_venta','venta','valor','importe','total','monto_de_venta']
 };
 
 function META_TOKEN(){ return PropertiesService.getScriptProperties().getProperty('META_TOKEN') || ''; }
@@ -62,6 +64,7 @@ function doGet(e){
   try{
     if(p.action==='update')  return out_(p.callback, updateLead_(p.id,p.status));
     if(p.action==='assign')  return out_(p.callback, setAsesor_(p.id,p.asesor));
+    if(p.action==='venta')   return out_(p.callback, setMonto_(p.id,p.monto));
     if(p.action==='metrics') return out_(p.callback, getMetrics_());
     return out_(p.callback, getLeads_());   // action 'leads' o vacío
   }catch(err){ return out_(p.callback,{error:String(err)}); }
@@ -87,6 +90,7 @@ function getLeads_(){
         tipo_mueble: mc?String(row[mc-1]||'').trim():'',
         campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').replace(/^[a-z]+:/i,'').trim(),
         asesor: String(get_(row,nm,A.asesor)||'').trim(),
+        monto: Number(String(get_(row,nm,A.monto)||'').replace(/[^0-9.\-]/g,''))||0,
         status: STATUSES.indexOf(st)>=0?st:'created' });
     }
   });
@@ -114,6 +118,30 @@ function updateLead_(id,status){
           capi=status+(res.ok?' - enviado a Meta':' - error '+res.code);
         }
         return {ok:true,status:status,capi:capi};
+      }
+    }
+  }
+  return {ok:false,error:'lead no encontrado'};
+}
+
+// Registrar CUÁNTO se vendió a ese lead; escribe en la columna 'monto_venta' (la crea si falta).
+// Es lo que permite saber qué anuncio trajo dinero, no solo cuál trajo formularios.
+function setMonto_(id,monto){
+  const v=Number(String(monto==null?'':monto).replace(/[^0-9.\-]/g,''));
+  if(!isFinite(v)||v<0) return {ok:false,error:'monto invalido'};
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  for(const sh of ss.getSheets()){
+    if(sh.getLastRow()<2) continue; const nm=nmap_(sh); const idc=col_(nm,A.id); if(!idc) continue;
+    let mc=col_(nm,A.monto); if(!mc){ sh.getRange(1,sh.getLastColumn()+1).setValue(MONTO_DEFAULT); mc=sh.getLastColumn(); }
+    const ids=sh.getRange(2,idc,Math.max(1,sh.getLastRow()-1),1).getValues();
+    for(let i=0;i<ids.length;i++){
+      if(String(ids[i][0])===String(id)){
+        const row=i+2;
+        sh.getRange(row,mc).setValue(v);
+        // registrar una venta implica que el lead se convirtió: se sube el estado solo
+        let sc=col_(nm,A.status);
+        if(v>0 && sc) sh.getRange(row,sc).setValue('converted');
+        return {ok:true,monto:v,status:v>0?'converted':undefined};
       }
     }
   }
