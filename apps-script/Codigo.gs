@@ -53,7 +53,17 @@ function nmap_(sh){ const h=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0]
 function col_(nm,aliases){ for(const a of aliases){ const c=nm[norm_(a)]; if(c) return c; } return 0; }
 function get_(row,nm,aliases){ const c=col_(nm,aliases); return c?row[c-1]:''; }
 function muebleCol_(nm){ const k=Object.keys(nm).find(x=>/mueble|que_busca/.test(x)); return k?nm[k]:0; }
-function isLeadSheet_(nm){ return !!(col_(nm,A.id)||col_(nm,A.email)||col_(nm,A.full)||col_(nm,A.first)||col_(nm,A.phone)); }
+/* El teléfono es lo único sin lo cual el vendedor no puede trabajar el lead, y Meta
+   le cambia el nombre al campo cada vez que se toca el formulario (pasó: el form
+   nuevo trae "número_de_whatsapp" y el dashboard dejó de mostrarlo). Por eso, si
+   ningún alias coincide, se busca CUALQUIER columna que parezca un teléfono. */
+function phoneCol_(nm){
+  const c=col_(nm,A.phone); if(c) return c;
+  const k=Object.keys(nm).find(x=>/whats|telef|celul|phone|movil|numero/.test(x));
+  return k?nm[k]:0;
+}
+function phoneOf_(row,nm){ const c=phoneCol_(nm); return c?row[c-1]:''; }
+function isLeadSheet_(nm){ return !!(col_(nm,A.id)||col_(nm,A.email)||col_(nm,A.full)||col_(nm,A.first)||phoneCol_(nm)); }
 function clean_(v){ return String(v==null?'':v).replace(/^[a-zA-Z]+:\s*/,'').trim(); }
 function isTest_(a,b){ return /test lead|dummy data|test@meta\.com/i.test(String(a)+' '+String(b)); }
 
@@ -96,7 +106,7 @@ function getLeads_(){
       const id=get_(row,nm,A.id), email=get_(row,nm,A.email);
       const full=get_(row,nm,A.full), fn=get_(row,nm,A.first), ln=get_(row,nm,A.last);
       const nombre=String(full||fn||'').trim(), apellido=String(full?'':(ln||'')).trim();
-      const phone=clean_(get_(row,nm,A.phone));
+      const phone=clean_(phoneOf_(row,nm));
       if(!id && !email && !phone) continue;
       if(isTest_(nombre+' '+apellido, email)) continue;
       const st=String(sc?row[sc-1]:'').toLowerCase().trim();
@@ -131,7 +141,7 @@ function updateLead_(id,status){
         let capi='';
         if(DATASET_ID && CAPI_STAGES.indexOf(status)>=0){
           const full=sh.getRange(row,1,1,sh.getLastColumn()).getValues()[0];
-          const res=sendCapi_(status,{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:get_(full,nm,A.phone)});
+          const res=sendCapi_(status,{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:phoneOf_(full,nm)});
           capi=status+(res.ok?' - enviado a Meta':' - error '+res.code);
         }
         return {ok:true,status:status,capi:capi};
@@ -165,7 +175,7 @@ function setMonto_(id,monto,producto){
         let capi='';
         if(v>0 && DATASET_ID){
           const full=sh.getRange(row,1,1,sh.getLastColumn()).getValues()[0];
-          const res=sendCapi_('converted',{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:get_(full,nm,A.phone),monto:v});
+          const res=sendCapi_('converted',{lead_id:get_(full,nm,A.id),email:get_(full,nm,A.email),phone:phoneOf_(full,nm),monto:v});
           capi='converted '+money_(v)+(res.ok?' - enviado a Meta':' - error '+res.code);
         }
         return {ok:true,monto:v,producto:v>0?prod:'',status:v>0?'converted':undefined,capi:capi};
