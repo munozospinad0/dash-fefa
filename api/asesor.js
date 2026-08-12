@@ -79,10 +79,15 @@ module.exports = function handler(req, res) {
   var DEF='Hola, vi su anuncio de Compra con Fefa y quiero cotizar 🙌';
   var qp=new URLSearchParams(location.search);
   var force=(qp.get('a')||'').toLowerCase();
+  var forced=(force==='mili'||force==='oscar');
   var num=force==='mili'?SELLERS[0]:force==='oscar'?SELLERS[1]:SELLERS[Math.floor(Math.random()*SELLERS.length)];
   var msg=qp.get('text')||DEF;
   function chatUrl(){var h=['wa','me'].join('.');return 'https://'+h+'/'+num+'?text='+encodeURIComponent(msg);}
   document.getElementById('go').addEventListener('click',function(e){e.preventDefault();location.href=chatUrl();});
+  // Si el lead RECIÉN entró, mándalo a SU asesor asignado; si no es fresco, se queda el 50/50 de arriba.
+  if(!forced){ try{ fetch('/api/nextadvisor').then(function(r){return r.json();}).then(function(j){
+    if(j&&j.ok&&j.fresh){ if(j.asesor==='Mili') num=SELLERS[0]; else if(j.asesor==='Oscar') num=SELLERS[1]; }
+  }).catch(function(){}); }catch(e){} }
 </script>
 </body></html>`;
   res.statusCode = 200;

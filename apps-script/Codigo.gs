@@ -91,6 +91,7 @@ function doGet(e){
     if(p.action==='update')  return out_(p.callback, updateLead_(p.id,p.status));
     if(p.action==='assign')  return out_(p.callback, setAsesor_(p.id,p.asesor));
     if(p.action==='venta')   return out_(p.callback, setMonto_(p.id,p.monto,p.producto));
+    if(p.action==='latest')  return out_(p.callback, getLatest_());
     if(p.action==='metrics') return out_(p.callback, getMetrics_());
     return out_(p.callback, getLeads_());   // action 'leads' o vacío
   }catch(err){ return out_(p.callback,{error:String(err)}); }
@@ -100,24 +101,33 @@ function getLeads_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const rows=[];
   ss.getSheets().forEach(sh=>{
     if(sh.getLastRow()<2) return; const nm=nmap_(sh); if(!isLeadSheet_(nm)) return;
-    const sc=col_(nm,A.status), mc=muebleCol_(nm); const data=sh.getDataRange().getValues();
+    /* Las columnas se resuelven UNA vez por hoja, no una vez por fila. Antes cada
+       celda llamaba a col_() -> norm_() (minúsculas + NFD + 3 regex); con 589 leads
+       eran ~70.000 normalizaciones por carga y el dashboard tardaba 8-22 s. */
+    const C={ id:col_(nm,A.id), created:col_(nm,A.created), full:col_(nm,A.full),
+      first:col_(nm,A.first), last:col_(nm,A.last), email:col_(nm,A.email),
+      phone:phoneCol_(nm), campaign:col_(nm,A.campaign), ad:col_(nm,A.ad),
+      ad_id:col_(nm,A.ad_id), status:col_(nm,A.status), asesor:col_(nm,A.asesor),
+      monto:col_(nm,A.monto), producto:col_(nm,A.producto), mueble:muebleCol_(nm) };
+    const v=(row,c)=> c?row[c-1]:'';
+    const data=sh.getDataRange().getValues();
     for(let r=1;r<data.length;r++){
       const row=data[r];
-      const id=get_(row,nm,A.id), email=get_(row,nm,A.email);
-      const full=get_(row,nm,A.full), fn=get_(row,nm,A.first), ln=get_(row,nm,A.last);
+      const id=v(row,C.id), email=v(row,C.email);
+      const full=v(row,C.full), fn=v(row,C.first), ln=v(row,C.last);
       const nombre=String(full||fn||'').trim(), apellido=String(full?'':(ln||'')).trim();
-      const phone=clean_(phoneOf_(row,nm));
+      const phone=clean_(v(row,C.phone));
       if(!id && !email && !phone) continue;
       if(isTest_(nombre+' '+apellido, email)) continue;
-      const st=String(sc?row[sc-1]:'').toLowerCase().trim();
+      const st=String(v(row,C.status)).toLowerCase().trim();
       rows.push({ _row:r+1, id:id,
-        fecha:String(get_(row,nm,A.created)||'').slice(0,16).replace('T',' '),
+        fecha:String(v(row,C.created)||'').slice(0,16).replace('T',' '),
         nombre:nombre, apellido:apellido, correo:email, celular:phone,
-        tipo_mueble: mc?String(row[mc-1]||'').trim():'',
-        campana:get_(row,nm,A.campaign), anuncio:get_(row,nm,A.ad), ad_id:String(get_(row,nm,A.ad_id)||'').replace(/^[a-z]+:/i,'').trim(),
-        asesor: String(get_(row,nm,A.asesor)||'').trim(),
-        monto: Number(String(get_(row,nm,A.monto)||'').replace(/[^0-9.\-]/g,''))||0,
-        producto: String(get_(row,nm,A.producto)||'').trim(),
+        tipo_mueble: String(v(row,C.mueble)||'').trim(),
+        campana:v(row,C.campaign), anuncio:v(row,C.ad), ad_id:String(v(row,C.ad_id)||'').replace(/^[a-z]+:/i,'').trim(),
+        asesor: String(v(row,C.asesor)||'').trim(),
+        monto: Number(String(v(row,C.monto)||'').replace(/[^0-9.\-]/g,''))||0,
+        producto: String(v(row,C.producto)||'').trim(),
         status: STATUSES.indexOf(st)>=0?st:'created' });
     }
   });
@@ -125,6 +135,18 @@ function getLeads_(){
   rows.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
   rows.forEach((l,i)=>{ if(ADVISORS.indexOf(l.asesor)<0) l.asesor=ADVISORS[i%ADVISORS.length]; });
   return {rows:rows,statuses:STATUSES,advisors:ADVISORS,ts:new Date().toLocaleString('es-PA')};
+}
+
+// Asesor del lead MÁS RECIENTE — para enrutar el "chatear ahora" del formulario al asesor que
+// le tocó a quien acaba de enviar. 'fresh'=llegó hace <3 min (proxy de que es esa persona). Si no
+// es fresco, el link cae en 50/50 (nunca queda peor que el reparto normal).
+function getLatest_(){
+  const d=getLeads_(); const rows=d.rows||[];
+  if(!rows.length) return {ok:true, asesor:'', fresh:false, n:0};
+  const last=rows[rows.length-1];   // getLeads_ ya viene ordenado ascendente por fecha
+  let ageSec=1e9; const t=Date.parse(String(last.fecha||'').replace(' ','T'));
+  if(!isNaN(t)) ageSec=(Date.now()-t)/1000;
+  return {ok:true, asesor:last.asesor||'', fresh:(ageSec>=0 && ageSec<180), ageSec:Math.round(ageSec), n:rows.length};
 }
 
 function updateLead_(id,status){
