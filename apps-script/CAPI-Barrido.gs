@@ -23,6 +23,18 @@ const BAR_CADA_MIN = 10;
 const BAR_COL_LOG  = 'capi_enviado';       // columna de control; se crea sola
 const BAR_DIAS     = 7;                    // Meta rechaza eventos más viejos que esto
 
+/* QUÉ HACER CON LO MARCADO HACE MÁS DE 7 DÍAS
+   Meta rechaza en seco el event_time real (error 2804003 "la fecha del evento es
+   demasiado antigua"). La única forma de aprovechar esa data es mandarla con la
+   fecha de HOY. Eso sirve muy bien para PÚBLICOS —excluir a los descalificados,
+   armar similares de los que sí califican— pero NO para optimizar, porque Meta
+   creería que pasó hoy.
+   Por eso 'qualified' queda excluido: es el evento con el que optimiza la campaña
+   activa, y meterle fechas falsas ensuciaría justo la señal que acabamos de
+   arreglar. Si algún día quieres mandarlo igual, quítalo de la lista de abajo. */
+const BAR_VIEJOS_ENVIAR  = true;
+const BAR_VIEJOS_EXCLUIR = ['qualified'];   // estados que NO se reenvían con fecha de hoy
+
 /* Los nombres DEBEN coincidir con los del Codigo.gs y con el custom_event_str
    del ad set. 'qualified' va tal cual porque así lo espera la campaña
    "Fefa | Leads | Sofás Salas Camas". Si cambias uno, cambia los tres sitios. */
@@ -91,7 +103,7 @@ function barridoCorrer(soloSimular){
   if (!barTok_()) { Logger.log('FALTA META_TOKEN en Propiedades del script'); return 'falta META_TOKEN'; }
   const ahora = Math.floor(Date.now()/1000), limite = BAR_DIAS*24*3600;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let enviados = 0, repetidos = 0, viejos = 0, errores = 0;
+  let enviados = 0, repetidos = 0, viejos = 0, errores = 0, recuperados = 0;
 
   ss.getSheets().forEach(function(sh){
     if (sh.getLastRow() < 2) return;
@@ -119,8 +131,17 @@ function barridoCorrer(soloSimular){
       if (!evento)      { logs.push([ya]); continue; }
       if (ya === estado){ logs.push([ya]); repetidos++; continue; }
 
-      const ts = cf ? barFecha_(row[cf-1]) : 0;
-      if (ts && ahora - ts > limite){ logs.push([ya]); viejos++; continue; }  // Meta lo rechazaría
+      // Fecha a usar. Si el lead es viejo, Meta no acepta su fecha real: o se manda
+      // con la de hoy (sirve para públicos) o no se manda.
+      let ts = cf ? barFecha_(row[cf-1]) : 0;
+      if (!ts) ts = ahora;
+      if (ahora - ts > limite){
+        if (!BAR_VIEJOS_ENVIAR || BAR_VIEJOS_EXCLUIR.indexOf(estado) >= 0){
+          logs.push([ya]); viejos++; continue;
+        }
+        ts = ahora;            // se reetiqueta con hoy para que Meta lo acepte
+        recuperados++;
+      }
 
       if (soloSimular){ logs.push([ya]); enviados++; continue; }
 
@@ -138,9 +159,10 @@ function barridoCorrer(soloSimular){
     if (!soloSimular && cl && logs.length) sh.getRange(2, cl, logs.length, 1).setValues(logs);
   });
 
-  const r = (soloSimular ? '(SIMULACION) ' : '') +
-            'mandaria/mando ' + enviados + ' · ya estaban ' + repetidos +
-            ' · muy viejos ' + viejos + ' · con error ' + errores;
+  const r = (soloSimular ? '(SIMULACION, no se envio nada) ' : '') +
+            'enviados ' + enviados + ' · de esos, viejos reetiquetados con hoy ' + recuperados +
+            ' · ya estaban ' + repetidos + ' · omitidos por viejos ' + viejos +
+            ' · con error ' + errores;
   Logger.log(r);
   return r;
 }
