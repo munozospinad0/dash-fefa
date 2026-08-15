@@ -16,9 +16,14 @@ const CAPI_STAGES= ['contacted','qualified','disqualified','converted'];
    El de calificado va personalizado porque Meta no tiene un estándar para
    "lead que al vendedor le sirvió" — ese es el patrón de conversion leads.
    Para cambiarlos, se toca SOLO esta tabla. */
+/* OJO: 'qualified' va TAL CUAL a propósito. El ad set de la campaña
+   "Fefa | Leads | Sofás Salas Camas" optimiza con custom_event_str = "qualified".
+   Si aquí se renombra, Meta espera un evento que nunca llega y la campaña
+   optimiza a ciegas. Antes de cambiar este nombre hay que cambiarlo también en
+   el ad set (promoted_object.custom_event_str), o al revés. */
 const EVENT_MAP = {
   contacted:    'Contact',
-  qualified:    'Lead_Calificado',
+  qualified:    'qualified',
   disqualified: 'Lead_Descalificado',
   converted:    'Purchase'
 };
