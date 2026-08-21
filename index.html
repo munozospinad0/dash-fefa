@@ -76,6 +76,10 @@
 
   /* ---- graficas ---- */
   .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}
+  /* Una serie de tiempo necesita ancho: apretada en una columna de 330 px las fechas
+     se encimaban y la tendencia (que es TODO el punto del gráfico) no se veía. */
+  .charts .chartcard.wide{grid-column:1/-1}
+  .charts .chartcard.wide .chartbox{height:300px}
   .chartcard{background:#fff;border-radius:22px;box-shadow:var(--sh);padding:20px 22px}
   .chartcard h3{font-size:.9rem;font-weight:800;margin-bottom:14px;letter-spacing:-.01em;color:var(--dark)}
   .chartbox{position:relative;height:270px}
@@ -303,10 +307,12 @@
   </section>
 
   <section>
-    <h2>Gráficas</h2>
-    <p class="sub">Evolución diaria, reparto del gasto y qué anuncios traen los leads</p>
+    <h2>A dónde va la inversión</h2>
+    <p class="sub">Cómo se mueve el gasto día a día, en qué campaña cae y qué anuncios devuelven leads</p>
     <div class="charts">
-      <div class="chartcard"><h3>Día a día · gasto y leads</h3><div class="chartbox"><canvas id="daily"></canvas></div></div>
+      <!-- La evolución es una serie de tiempo: comprimida a un tercio de ancho junto a
+           dos donas no se leía. Va sola, a lo ancho; las de reparto van debajo, en par. -->
+      <div class="chartcard wide"><h3>Día a día · gasto y leads</h3><div class="chartbox"><canvas id="daily"></canvas></div></div>
       <div class="chartcard"><h3>Gasto por campaña</h3><div class="chartbox"><canvas id="donut"></canvas></div></div>
       <div class="chartcard"><h3>Leads por anuncio</h3><div class="chartbox"><canvas id="adbars"></canvas></div></div>
     </div>
