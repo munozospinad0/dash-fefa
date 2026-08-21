@@ -182,6 +182,8 @@
   /* OJO: no usar la clase "camp" aquí — es la de las tarjetas de campaña, que traen
      un ::before con una barra violeta que se pintaba encima de la etiqueta. */
   .tag.adtag{background:#eef1fb;color:#4b4b8a}
+  /* Lead que llegó por una promoción con fecha de vencimiento */
+  .tpromo{background:#fff1e2;color:#c05e00;font-weight:800}
   .adprev{cursor:pointer;border:0;font:inherit;display:inline-flex;align-items:center;gap:4px}
   .adprev:hover{filter:brightness(.96);text-decoration:underline}
   .adprev svg{width:12px;height:12px;stroke:currentColor}
@@ -417,6 +419,12 @@
   const ETIQUETA={created:'Nuevo',contacted:'Contactado',qualified:'Interesado',
                   disqualified:'Descartado',converted:'Compró',todos:'Todos'};
   const eti=s=>ETIQUETA[s]||s;
+  /* Los anuncios llevan prefijo de gestión: "[PROMO vence 31-ago-26]" en los que caducan
+     y "[PERMANENTE]" en los que no. Sirve para encontrarlos y apagarlos en el
+     Administrador de anuncios, pero en pantalla solo estorba: aquí se separa el dato
+     (la fecha de vencimiento, que el vendedor SÍ necesita) del nombre del anuncio. */
+  const venceDe=n=>{ const m=String(n||'').match(/^\[PROMO\s+vence\s+([^\]]+)\]/i); return m?m[1].trim():''; };
+  const limpiarAnuncio=n=>String(n||'').replace(/^\[[^\]]*\]\s*/,'');
   const PRESETS=[['today','Hoy'],['yesterday','Ayer'],['last_7d','7 días'],['last_30d','30 días'],['maximum','Todo']];
   /* Las BANDEJAS son la división principal de la vista de leads.
      Antes lo primero era el tipo de mueble (Sofás / Camas / Comedores), pero el
@@ -519,7 +527,8 @@
       const withLeads=rows.filter(a=>a.leads>0).slice(0,7);
       const src=withLeads.length?withLeads:rows.slice(0,7);
       const useLeads=withLeads.length>0;
-      mkChart('adbars',{type:'bar',data:{labels:src.map(a=>a.name.length>26?a.name.slice(0,25)+'…':a.name),datasets:[{label:useLeads?'Leads':'CTR %',data:src.map(a=>useLeads?a.leads:a.ctr),backgroundColor:src.map((_,i)=>CPAL[i%CPAL.length]),borderRadius:8}]},
+      const corto=n=>{const x=limpiarAnuncio(n);return x.length>26?x.slice(0,25)+'…':x;};
+      mkChart('adbars',{type:'bar',data:{labels:src.map(a=>corto(a.name)),datasets:[{label:useLeads?'Leads':'CTR %',data:src.map(a=>useLeads?a.leads:a.ctr),backgroundColor:src.map((_,i)=>CPAL[i%CPAL.length]),borderRadius:8}]},
         options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{stepSize:useLeads?1:undefined,font:{size:10}},grid:{color:'rgba(62,42,155,.06)'}},y:{ticks:{font:{size:9.5}},grid:{display:false}}}}});
     }).catch(e=>{ document.querySelector('#adsTable tbody').innerHTML='<tr><td colspan="7"><div class="state" style="padding:18px">'+esc(e.message)+'</div></td></tr>'; });
 
@@ -632,7 +641,7 @@
       const vta='<td class="r num qv '+(rev?'qgood':'qzero')+'">'+(rev?money(rev):'—')+
           (nv?' <small>('+nv+')</small>':'')+'</td>'+
           '<td class="r num qv '+(roas>=3?'qgood':(roas>0?'qmid':'qzero'))+'">'+(roas?roas.toFixed(1)+'x':'—')+'</td>';
-      return '<tr class="clk" onclick="openPv(\''+esc(a.id)+'\',\''+esc(a.name).replace(/'/g,'&#39;')+'\')"><td><div class="an" title="'+esc(a.name)+'">'+esc(a.name)+'</div><div class="bar"><i style="width:'+Math.max(2,Math.round(a.spend/mx*100))+'%"></i></div></td>'
+      return '<tr class="clk" onclick="openPv(\''+esc(a.id)+'\',\''+esc(a.name).replace(/'/g,'&#39;')+'\')"><td><div class="an" title="'+esc(a.name)+'">'+esc(a.name.replace(/^\[PERMANENTE\]\s*/,''))+'</div><div class="bar"><i style="width:'+Math.max(2,Math.round(a.spend/mx*100))+'%"></i></div></td>'
       +'<td><span class="cchip '+k[0]+'">'+esc(k[1])+'</span></td>'
       +'<td class="r num">'+money(a.spend)+'</td><td class="r num'+(a.leads?' hot':'')+'">'+intf(a.leads)+'</td><td class="r num">'+(a.leads?money(a.spend/a.leads):'—')+'</td>'
       +cal+vta
@@ -849,9 +858,13 @@
     const opts=STATUSES.map(o=>'<option value="'+o+'"'+(o===e?' selected':'')+'>'+eti(o)+'</option>').join('');
     const advs=(window.ADVISORS||['Mili','Oscar']);
     const aopts=advs.map(o=>'<option'+(o===(l.asesor||'')?' selected':'')+'>'+esc(o)+'</option>').join('');
+    const ad=limpiarAnuncio(l.anuncio), promo=venceDe(l.anuncio);
     const anun=l.anuncio?(l.ad_id
-        ?'<button class="tag adtag adprev" onclick="openPv(\''+esc(l.ad_id)+'\',\''+esc(l.anuncio)+'\')" title="Ver el anuncio de donde vino este lead">'+IC.eye+esc(l.anuncio)+'</button>'
-        :'<span class="tag adtag">'+esc(l.anuncio)+'</span>'):'';
+        ?'<button class="tag adtag adprev" onclick="openPv(\''+esc(l.ad_id)+'\',\''+esc(l.anuncio)+'\')" title="Ver el anuncio de donde vino este lead">'+IC.eye+esc(ad)+'</button>'
+        :'<span class="tag adtag">'+esc(ad)+'</span>'):'';
+    /* Etiqueta propia para los leads que llegaron por una promoción con fecha:
+       el vendedor tiene que saberlo ANTES de repetirle el precio al cliente. */
+    const tpromo=promo?'<span class="tag tpromo" title="Este lead vino de un anuncio de promoción">Promo · vence '+esc(promo)+'</span>':'';
     /* Un lead nuevo que lleva días parado es lo único que de verdad urge avisar.
        Solo se marca en los que nadie ha tocado: en los demás ya hubo contacto. */
     const d=diasDe(l);
@@ -863,7 +876,7 @@
         +'<span class="asetag ase-'+esc(l.asesor||'')+'">'+esc(l.asesor||'')+'</span></div>'
       +(l.correo?'<div class="row">'+IC.mail+'<a href="mailto:'+esc(l.correo)+'">'+esc(l.correo)+'</a></div>':'')
       +(l.celular?'<div class="row">'+IC.phone+'<a href="https://wa.me/'+wa+'" target="_blank" rel="noopener">'+esc(l.celular)+'</a></div>':'')
-      +'<div class="tags">'+(mlab?'<span class="tag" style="background:#fff1e2;color:#c05e00;font-weight:700">'+mlab+'</span>':'')+(l.empresa?'<span class="tag">'+esc(l.empresa)+'</span>':'')+anun+'</div>'
+      +'<div class="tags">'+(mlab?'<span class="tag" style="background:#fff1e2;color:#c05e00;font-weight:700">'+mlab+'</span>':'')+tpromo+(l.empresa?'<span class="tag">'+esc(l.empresa)+'</span>':'')+anun+'</div>'
       +'<div class="foot"><select class="est" data-e="'+esc(e)+'" onchange="chg(this,\''+esc(l.id)+'\')">'+opts+'</select>'
       +'<select class="ase" title="Asesor asignado" onchange="assign(this,\''+esc(l.id)+'\')">'+aopts+'</select>'
       +'<span class="vsell'+(Number(l.monto)>0?' has':'')+'" id="vw-'+esc(l.id)+'">'
