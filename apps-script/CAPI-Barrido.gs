@@ -175,7 +175,7 @@ function barPost_(nombre, lead){
   if (lead.phone){ const p = String(lead.phone).replace(/[^0-9]/g,''); if (p) ud.ph = [barSha_(p)]; }
   if (!ud.lead_id && !ud.em && !ud.ph) return { ok:false, code:'sin_identificador' };
 
-  const cd = { event_source: 'crm' };
+  const cd = { event_source: 'crm', lead_event_source: 'Dashboard Fefa' };
   if (nombre === 'Purchase' && Number(lead.monto) > 0){ cd.value = Number(lead.monto); cd.currency = 'USD'; }
 
   const evt = {

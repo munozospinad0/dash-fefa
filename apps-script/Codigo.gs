@@ -255,7 +255,7 @@ function sendCapi_(eventName,lead){
   if(lead.email) ud.em=[sha256_(String(lead.email).trim().toLowerCase())];
   if(lead.phone){ const p=String(lead.phone).replace(/[^0-9]/g,''); if(p) ud.ph=[sha256_(p)]; }
   // Con el monto de venta, Meta puede optimizar por VALOR y no solo por conteo.
-  const cd={event_source:'crm'};
+  const cd={event_source:'crm',lead_event_source:'Dashboard Fefa'};
   const val=Number(lead.monto)||0;
   if(val>0){ cd.value=val; cd.currency='USD'; }
   const evt={event_name:eventName,event_time:Math.floor(Date.now()/1000),action_source:'system_generated',event_id:'fefa-'+lid+'-'+eventName+'-'+Date.now(),user_data:ud,custom_data:cd};

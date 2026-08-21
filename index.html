@@ -355,19 +355,16 @@
 
   <section>
     <h2>Leads</h2>
-    <p class="sub">Gestiona cada lead: al tocar el número se abre WhatsApp · cambia el estado y se envía a Meta</p>
-    <div class="tabs">
-      <button class="tab on" data-tipo="sofas" onclick="switchTab('sofas')"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 16v-2a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M6 18v2M18 18v2"/></svg> Sofás / Salas <span class="cnt" id="cnt-sofas">0</span></button>
-      <button class="tab" data-tipo="camas" onclick="switchTab('camas')"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M2 10V6h20v4"/><path d="M2 18v-6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><path d="M2 18h20"/></svg> Camas <span class="cnt" id="cnt-camas">0</span></button>
-      <button class="tab" data-tipo="comedores" onclick="switchTab('comedores')"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="9" width="18" height="3" rx="1"/><path d="M5 12v8M19 12v8M7 9V5M17 9V5"/></svg> Comedores <span class="cnt" id="cnt-comedores">0</span></button>
-    </div>
+    <p class="sub">Empieza por <b>Por contactar</b>: son los que nadie ha tocado todavía. Al tocar el número se abre WhatsApp.</p>
+    <div class="tabs" id="bandejas"></div>
     <div class="toolbar">
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="q" placeholder="Buscar nombre, correo, teléfono…" oninput="render()"></label>
-      <div class="filtros" id="filtros"></div>
       <button class="btn" id="refbtn" onclick="loadAll(true)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg> Actualizar</button>
     </div>
-    <div class="sellhint"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><div><b>¿El lead compró?</b> Toca <b>+ Registrar venta</b> en su tarjeta, escribe el monto en dólares y elige el producto. El lead pasa a <b>Convertido</b> y se calcula cuánto <b>devolvió</b> el anuncio que lo trajo.</div></div>
+    <div class="filtros" id="filtros"></div>
+    <div class="sellhint" id="sellhint"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><div><b>¿El lead compró?</b> Toca <b>+ Registrar venta</b> en su tarjeta, escribe el monto en dólares y elige el producto. El lead pasa a <b>Compró</b> y se calcula cuánto <b>devolvió</b> el anuncio que lo trajo.</div></div>
     <div id="content"><div class="state"><div class="spin2"></div>Cargando leads…</div></div>
+    <div id="vermas"></div>
   </section>
 </div>
 <footer>Mueblería Compra con Fefa · gestionado por ECUS Agency</footer>
@@ -404,7 +401,22 @@
                   disqualified:'Descartado',converted:'Compró',todos:'Todos'};
   const eti=s=>ETIQUETA[s]||s;
   const PRESETS=[['today','Hoy'],['yesterday','Ayer'],['last_7d','7 días'],['last_30d','30 días'],['maximum','Todo']];
-  let tipo='sofas', filtro='todos', asesorFiltro='todos', preset='maximum', cache={sofas:[],camas:[],comedores:[]}, charts={};
+  /* Las BANDEJAS son la división principal de la vista de leads.
+     Antes lo primero era el tipo de mueble (Sofás / Camas / Comedores), pero el
+     vendedor no abre el dashboard preguntándose "¿qué camas tengo?": abre para
+     saber A QUIÉN LE FALTA ESCRIBIRLE. Así que manda el estado, y el mueble
+     queda como filtro de segundo nivel. */
+  const BANDEJAS=[
+    ['pendientes','Por contactar',['created']],
+    ['conversando','En conversación',['contacted']],
+    ['interesados','Interesados',['qualified']],
+    ['compraron','Compraron',['converted']],
+    ['descartados','Descartados',['disqualified']],
+    ['todos','Todos',null]
+  ];
+  const PASO=24;   // cuántas tarjetas se pintan de una; el resto entra con "Ver más"
+  let bandeja='pendientes', tipoFiltro='todos', asesorFiltro='todos', verMax=PASO,
+      preset='maximum', cache={all:[],sofas:[],camas:[],comedores:[]}, charts={};
   const pendingStatus={}, pendingAsesor={};   // id -> valor recién marcado, protegido hasta que el server lo confirme
   const S=p=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+p+'</svg>';
   const IC={
