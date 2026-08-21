@@ -134,12 +134,29 @@
   .tab .cnt{font-size:.78rem;background:var(--pink);color:var(--vio);padding:3px 12px;border-radius:20px;font-weight:800}
   .tab.on{background:linear-gradient(120deg,var(--vio),var(--vio2));color:#fff;box-shadow:0 12px 26px rgba(62,42,155,.32)}
   .tab.on .cnt{background:rgba(255,255,255,.22);color:#fff}
+  /* Cada bandeja lleva el mismo color que su estado en el embudo y en la tarjeta,
+     para que "naranja" quiera decir lo mismo en toda la pantalla. */
+  .bdot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--created)}
+  .bd-conversando .bdot{background:var(--contacted)}.bd-interesados .bdot{background:var(--qualified)}
+  .bd-compraron .bdot{background:var(--converted)}.bd-descartados .bdot{background:var(--disqualified)}
+  .bd-todos .bdot{background:linear-gradient(135deg,var(--vio),var(--vio2))}
+  .tab.bd-pendientes .cnt{background:#fdecec;color:#c02626}
+  .tab.bd-pendientes.on .cnt{background:rgba(255,255,255,.22);color:#fff}
+  /* Aviso de lead nuevo que lleva días parado */
+  .frio{display:inline-block;margin-left:7px;font-size:.62rem;font-weight:800;letter-spacing:.02em;
+    text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#fff3e0;color:#b45309}
+  .frio.mucho{background:#fdecec;color:#c02626}
+  .lead[data-frio]{box-shadow:0 0 0 1.5px #f5c98f, var(--sh)}
+  .vermas{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .vermas span{font-size:.76rem;font-weight:700;color:var(--ink)}
   .toolbar{display:flex;align-items:center;gap:10px;margin:18px 0 20px;flex-wrap:wrap}
   .search{flex:1;min-width:220px;display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:13px 17px;box-shadow:var(--sh)}
   .search input{border:0;outline:0;flex:1;font-size:.94rem;color:var(--dark);background:transparent;font-family:inherit}
   .search svg{width:17px;height:17px;stroke:var(--ink)}
   .filtros{display:flex;gap:7px;flex-wrap:wrap}
-  .chip{border:0;background:#fff;box-shadow:var(--sh);color:var(--ink);padding:10px 16px;border-radius:24px;font-size:.8rem;font-weight:700;cursor:pointer;transition:.2s;text-transform:capitalize;font-family:inherit}
+  /* sin capitalize: las etiquetas ya vienen escritas como se leen ("Ambos asesores",
+     no "Ambos Asesores"). El capitalize venía de cuando los estados salían en inglés. */
+  .chip{border:0;background:#fff;box-shadow:var(--sh);color:var(--ink);padding:10px 16px;border-radius:24px;font-size:.8rem;font-weight:700;cursor:pointer;transition:.2s;font-family:inherit}
   .chip.on{background:var(--dark);color:#fff}
   .btn{border:0;background:linear-gradient(120deg,var(--vio),var(--vio2));color:#fff;padding:13px 19px;border-radius:14px;font-weight:700;font-size:.88rem;cursor:pointer;display:inline-flex;gap:9px;align-items:center;transition:.2s;font-family:inherit;box-shadow:0 8px 18px rgba(62,42,155,.28)}
   .btn:hover{transform:translateY(-1px)}
@@ -564,7 +581,7 @@
 
   /* ============ EMBUDO CRM ============ */
   function renderFunnel(){
-    const all=cache.sofas.concat(cache.camas).concat(cache.comedores); const total=all.length||1;
+    const all=cache.all||[]; const total=all.length||1;
     /* "Contactados" incluye a los DESCALIFICADOS a propósito: para descalificar a
        alguien primero hubo que hablarle. Antes se contaban aparte y el embudo decía
        334 de 606 cuando en realidad el equipo ya los había trabajado a todos. */
@@ -701,9 +718,30 @@
 
   /* ============ LEADS (via proxy /api/leads) ============ */
   function deriveTipo(l){ const s=String(l.tipo_mueble||l.mueble||l.que_busca||l.tipo||'').toLowerCase(); if(/cama/.test(s)) return 'camas'; if(/comedor/.test(s)) return 'comedores'; if(/sof|sala/.test(s)) return 'sofas'; return 'sofas'; }
-  function switchTab(t){ tipo=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tipo===t)); render(); }
-  function setFiltro(e){ filtro=e; render(); }
-  function setAsesorFiltro(a){ asesorFiltro=a; render(); }
+  function setBandeja(b){ bandeja=b; verMax=PASO; render(); }
+  function setTipo(t){ tipoFiltro=t; verMax=PASO; render(); }
+  function setAsesorFiltro(a){ asesorFiltro=a; verMax=PASO; render(); }
+  function verMasLeads(){ verMax+=PASO; render(); }
+
+  /* Un lead de hace 3 semanas y uno de hace 20 minutos se veían idénticos: la
+     fecha salía cruda ("2026-08-21 14:03") y había que hacer la cuenta de cabeza.
+     La antigüedad es lo que decide a quién se le escribe primero. */
+  const DIA=86400000;
+  function diasDe(l){
+    const t=Date.parse(String(l.fecha||'').replace(' ','T'));
+    return isNaN(t)?null:Math.floor((Date.now()-t)/DIA);
+  }
+  function hace(l){
+    const t=Date.parse(String(l.fecha||'').replace(' ','T'));
+    if(isNaN(t)) return esc(l.fecha||'');
+    const min=Math.floor((Date.now()-t)/60000);
+    if(min<60) return min<=1?'hace un momento':'hace '+min+' min';
+    const h=Math.floor(min/60); if(h<24) return 'hace '+h+(h===1?' hora':' horas');
+    const d=Math.floor(h/24);
+    if(d===1) return 'ayer';
+    if(d<30) return 'hace '+d+' días';
+    const m=Math.floor(d/30); return 'hace '+m+(m===1?' mes':' meses');
+  }
 
   /* Prepara las filas crudas del Apps Script: tipo, teléfono limpio, y respeta un
      estado/asesor que acabas de marcar y el server todavía no confirma. */
@@ -716,10 +754,11 @@
   }
   function pintarLeads(all,ts){
     buildLeadQ(all);
-    cache.sofas=all.filter(l=>l.tipo==='sofas'); cache.camas=all.filter(l=>l.tipo==='camas'); cache.comedores=all.filter(l=>l.tipo==='comedores');
-    document.getElementById('cnt-sofas').textContent=cache.sofas.length;
-    document.getElementById('cnt-camas').textContent=cache.camas.length;
-    document.getElementById('cnt-comedores').textContent=cache.comedores.length;
+    /* El Apps Script entrega los leads ASCENDENTE por fecha (lo necesita para repartir
+       50/50 entre asesores). Pintarlos en ese orden dejaba los de julio arriba y los de
+       hoy al final de cientos de tarjetas: el vendedor abría el dash y veía lo más viejo. */
+    all.sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+    cache.all=all;   // el tipo de mueble ya viene en l.tipo; se filtra al pintar
     document.getElementById('upd').textContent=ts;
     renderFunnel(); render();
   }
@@ -754,18 +793,49 @@
     });
   }
 
+  const enBandeja=(l,b)=>{ const B=BANDEJAS.find(x=>x[0]===b); return !B||!B[2]||B[2].includes(l.status||'created'); };
+
   function render(){
     const advs=(window.ADVISORS||['Mili','Oscar']);
-    document.getElementById('filtros').innerHTML=['todos'].concat(STATUSES).map(e=>'<button class="chip'+(filtro===e?' on':'')+'" onclick="setFiltro(\''+e+'\')">'+eti(e)+'</button>').join('')
-      +'<span class="fsep"></span>'+['todos'].concat(advs).map(a=>'<button class="chip chipa'+(asesorFiltro===a?' on':'')+'" onclick="setAsesorFiltro(\''+a+'\')">'+(a==='todos'?'Ambos':esc(a))+'</button>').join('');
-    let rows=(cache[tipo]||[]).slice();
-    const q=(document.getElementById('q').value||'').toLowerCase().trim();
-    if(filtro!=='todos') rows=rows.filter(l=>(l.status||'created')===filtro);
+    const todos=cache.all||[];
+
+    // Bandejas, con el número de leads que hay en cada una
+    document.getElementById('bandejas').innerHTML=BANDEJAS.map(b=>{
+      const n=todos.filter(l=>enBandeja(l,b[0])).length;
+      return '<button class="tab'+(bandeja===b[0]?' on':'')+' bd-'+b[0]+'" onclick="setBandeja(\''+b[0]+'\')">'
+        +'<i class="bdot"></i>'+b[1]+'<span class="cnt">'+n+'</span></button>';
+    }).join('');
+
+    // Filtros de segundo nivel: tipo de mueble y asesor
+    const TIPOS=[['todos','Todo'],['sofas','Sofás / Salas'],['camas','Camas'],['comedores','Comedores']];
+    document.getElementById('filtros').innerHTML=
+      TIPOS.map(t=>'<button class="chip'+(tipoFiltro===t[0]?' on':'')+'" onclick="setTipo(\''+t[0]+'\')">'+t[1]+'</button>').join('')
+      +'<span class="fsep"></span>'
+      +['todos'].concat(advs).map(a=>'<button class="chip chipa'+(asesorFiltro===a?' on':'')+'" onclick="setAsesorFiltro(\''+a+'\')">'+(a==='todos'?'Ambos asesores':esc(a))+'</button>').join('');
+
+    let rows=todos.filter(l=>enBandeja(l,bandeja));
+    if(tipoFiltro!=='todos') rows=rows.filter(l=>l.tipo===tipoFiltro);
     if(asesorFiltro!=='todos') rows=rows.filter(l=>(l.asesor||'')===asesorFiltro);
-    if(q) rows=rows.filter(l=>((l.nombre||'')+' '+(l.apellido||'')+' '+(l.correo||'')+' '+(l.empresa||'')).toLowerCase().includes(q));
-    const c=document.getElementById('content');
-    if(!rows.length){ c.innerHTML='<div class="state">'+IC.inbox+'Sin leads'+(filtro!=='todos'?' en "'+filtro+'"':'')+' en esta pestaña todavía.</div>'; return; }
-    c.innerHTML='<div class="grid">'+rows.map(card).join('')+'</div>';
+    const q=(document.getElementById('q').value||'').toLowerCase().trim();
+    if(q) rows=rows.filter(l=>((l.nombre||'')+' '+(l.apellido||'')+' '+(l.correo||'')+' '+(l.empresa||'')+' '+(l.celular||'')).toLowerCase().includes(q));
+
+    // El recordatorio de registrar la venta solo estorba en las bandejas donde no aplica
+    document.getElementById('sellhint').style.display=['interesados','conversando','compraron','todos'].includes(bandeja)?'':'none';
+
+    const c=document.getElementById('content'), vm=document.getElementById('vermas');
+    if(!rows.length){
+      const B=BANDEJAS.find(x=>x[0]===bandeja);
+      c.innerHTML='<div class="state">'+IC.inbox+(q?'Ningún lead coincide con esa búsqueda.'
+        :(bandeja==='pendientes'?'Todo al día: no hay leads sin contactar.':'Nada en «'+B[1]+'» con estos filtros.'))+'</div>';
+      vm.innerHTML=''; return;
+    }
+    const visibles=rows.slice(0,verMax);
+    c.innerHTML='<div class="grid">'+visibles.map(card).join('')+'</div>';
+    const faltan=rows.length-visibles.length;
+    vm.innerHTML=faltan>0
+      ? '<div class="vermas"><button class="btn" onclick="verMasLeads()">Ver '+Math.min(PASO,faltan)+' más</button>'
+        +'<span>Mostrando '+visibles.length+' de '+rows.length+'</span></div>'
+      : (rows.length>PASO?'<div class="vermas"><span>'+rows.length+' leads en esta bandeja</span></div>':'');
   }
 
   function card(l){
@@ -774,14 +844,23 @@
     const ini=nombre.split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
     const wa=String(l.celular||'').replace(/[^0-9]/g,'');
     const mlab={sofas:'Sofás / Salas',camas:'Camas',comedores:'Comedores'}[l.tipo]||'';
-    const opts=STATUSES.map(o=>'<option value="'+o+'"'+(o===e?' selected':'')+'>'+o+'</option>').join('');
+    /* El desplegable seguía mostrando el valor crudo ("disqualified", "created").
+       El value que viaja a la hoja y al CAPI no cambia; solo la etiqueta visible. */
+    const opts=STATUSES.map(o=>'<option value="'+o+'"'+(o===e?' selected':'')+'>'+eti(o)+'</option>').join('');
     const advs=(window.ADVISORS||['Mili','Oscar']);
     const aopts=advs.map(o=>'<option'+(o===(l.asesor||'')?' selected':'')+'>'+esc(o)+'</option>').join('');
     const anun=l.anuncio?(l.ad_id
         ?'<button class="tag adtag adprev" onclick="openPv(\''+esc(l.ad_id)+'\',\''+esc(l.anuncio)+'\')" title="Ver el anuncio de donde vino este lead">'+IC.eye+esc(l.anuncio)+'</button>'
         :'<span class="tag adtag">'+esc(l.anuncio)+'</span>'):'';
-    return '<div class="lead" data-e="'+esc(e)+'">'
-      +'<div class="lhead"><div class="av">'+esc(ini)+'</div><div><h3>'+esc(nombre)+'</h3><div class="meta">'+esc(l.fecha||'')+'</div></div><span class="asetag ase-'+esc(l.asesor||'')+'">'+esc(l.asesor||'')+'</span></div>'
+    /* Un lead nuevo que lleva días parado es lo único que de verdad urge avisar.
+       Solo se marca en los que nadie ha tocado: en los demás ya hubo contacto. */
+    const d=diasDe(l);
+    const aviso=(e==='created'&&d!=null&&d>=1)
+      ? '<b class="frio'+(d>=3?' mucho':'')+'">'+(d>=3?'sin contactar hace '+d+' días':'sin contactar')+'</b>' : '';
+    return '<div class="lead" data-e="'+esc(e)+'"'+(aviso?' data-frio="1"':'')+'>'
+      +'<div class="lhead"><div class="av">'+esc(ini)+'</div>'
+        +'<div><h3>'+esc(nombre)+'</h3><div class="meta" title="'+esc(l.fecha||'')+'">'+hace(l)+aviso+'</div></div>'
+        +'<span class="asetag ase-'+esc(l.asesor||'')+'">'+esc(l.asesor||'')+'</span></div>'
       +(l.correo?'<div class="row">'+IC.mail+'<a href="mailto:'+esc(l.correo)+'">'+esc(l.correo)+'</a></div>':'')
       +(l.celular?'<div class="row">'+IC.phone+'<a href="https://wa.me/'+wa+'" target="_blank" rel="noopener">'+esc(l.celular)+'</a></div>':'')
       +'<div class="tags">'+(mlab?'<span class="tag" style="background:#fff1e2;color:#c05e00;font-weight:700">'+mlab+'</span>':'')+(l.empresa?'<span class="tag">'+esc(l.empresa)+'</span>':'')+anun+'</div>'
@@ -819,7 +898,7 @@
     const v=Number(mi&&mi.value)||0, prod=(v>0&&pi)?pi.value:'';
     const sv=document.getElementById('sv-'+id);
     const w=document.getElementById('vw-'+id), t=w?w.querySelector('.vsell-t'):null;
-    const l=(cache[tipo]||[]).find(x=>String(x.id)===String(id));
+    const l=(cache.all||[]).find(x=>String(x.id)===String(id));
     const prevM=l?l.monto:0, prevS=l?l.status:'created', prevP=l?l.producto:'';
     if(l){ l.monto=v; l.producto=prod; if(v>0) l.status='converted'; }
     if(w){ w.classList.remove('edit'); w.classList.toggle('has',v>0); }
@@ -831,7 +910,7 @@
       if(r.ok){
         sv.className='save show ok'; sv.textContent=v>0?'Venta guardada':'Monto borrado';
         setTimeout(()=>sv.classList.remove('show'),2800);
-        const all=[].concat(cache.sofas||[],cache.camas||[],cache.comedores||[]);
+        const all=cache.all||[];
         buildLeadQ(all); render();
       } else throw new Error(r.error||'error');
     }).catch(err=>{
@@ -848,7 +927,7 @@
     const val=sel.value, sv=document.getElementById('sv-'+id);
     sel.setAttribute('data-e',val); sel.closest('.lead').setAttribute('data-e',val);
     sv.className='save show'; sv.textContent='Guardando…';
-    const l=(cache[tipo]||[]).find(x=>String(x.id)===String(id)); const prev=l?l.status:'created';
+    const l=(cache.all||[]).find(x=>String(x.id)===String(id)); const prev=l?l.status:'created';
     if(l) l.status=val;
     pendingStatus[String(id)]=val;                 // proteger contra refrescos hasta confirmar
     renderFunnel();
@@ -866,7 +945,7 @@
 
   function assign(sel,id){
     const val=sel.value, sv=document.getElementById('sv-'+id);
-    const l=(cache[tipo]||[]).find(x=>String(x.id)===String(id)); if(l) l.asesor=val;
+    const l=(cache.all||[]).find(x=>String(x.id)===String(id)); if(l) l.asesor=val;
     pendingAsesor[String(id)]=val;                 // proteger el asesor contra refrescos hasta confirmar
     const cardEl=sel.closest('.lead'), tag=cardEl&&cardEl.querySelector('.asetag');
     if(tag){ tag.textContent=val; tag.className='asetag ase-'+val; }
