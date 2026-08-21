@@ -833,6 +833,17 @@
     const t=Date.parse(String(l.fecha||'').replace(' ','T'));
     return isNaN(t)?null:Math.floor((Date.now()-t)/DIA);
   }
+  /* "Enfriándose" = sigue abierto y lleva días quieto. Los cerrados (compró o se
+     descartó) nunca entran: ahí ya se tomó una decisión. */
+  let soloEstancados=false;
+  function esEstancado(l){
+    const e=l.status||'created';
+    if(e==='converted'||e==='disqualified') return false;
+    const d=diasDe(l);
+    if(d==null) return false;
+    return (e==='created' && d>=1) || (e!=='created' && d>=5);
+  }
+  function setEstancados(){ soloEstancados=!soloEstancados; render(); }
   function hace(l){
     const t=Date.parse(String(l.fecha||'').replace(' ','T'));
     if(isNaN(t)) return esc(l.fecha||'');
@@ -918,13 +929,21 @@
     document.getElementById('filtros').innerHTML=
       TIPOS.map(t=>'<button class="chip'+(tipoFiltro===t[0]?' on':'')+'" onclick="setTipo(\''+t[0]+'\')">'+t[1]+'</button>').join('')
       +'<span class="fsep"></span>'
-      +['todos'].concat(advs).map(a=>'<button class="chip chipa'+(asesorFiltro===a?' on':'')+'" onclick="setAsesorFiltro(\''+a+'\')">'+(a==='todos'?'Ambos asesores':esc(a))+'</button>').join('');
+      +['todos'].concat(advs).map(a=>'<button class="chip chipa'+(asesorFiltro===a?' on':'')+'" onclick="setAsesorFiltro(\''+a+'\')">'+(a==='todos'?'Ambos asesores':esc(a))+'</button>').join('')
+      /* Los leads que se enfriaron son la cola de trabajo más rentable: ya mostraron
+         interés y solo les falta seguimiento. Sin este filtro había que ir mirándolos
+         de a uno entre cientos. */
+      +'<span class="fsep"></span>'
+      +'<button class="chip'+(soloEstancados?' on':'')+'" onclick="setEstancados()" title="Leads que llevan días sin moverse">'
+      +'Se están enfriando<span class="cnt">'+todos.filter(esEstancado).length+'</span></button>';
 
     let rows=todos.filter(l=>enBandeja(l,bandeja));
     if(tipoFiltro!=='todos') rows=rows.filter(l=>l.tipo===tipoFiltro);
     if(asesorFiltro!=='todos') rows=rows.filter(l=>(l.asesor||'')===asesorFiltro);
+    if(soloEstancados) rows=rows.filter(esEstancado);
     const q=(document.getElementById('q').value||'').toLowerCase().trim();
-    if(q) rows=rows.filter(l=>((l.nombre||'')+' '+(l.apellido||'')+' '+(l.correo||'')+' '+(l.empresa||'')+' '+(l.celular||'')).toLowerCase().includes(q));
+    // Se busca también por anuncio: "de qué campaña vino" es una pregunta frecuente.
+    if(q) rows=rows.filter(l=>((l.nombre||'')+' '+(l.apellido||'')+' '+(l.correo||'')+' '+(l.empresa||'')+' '+(l.celular||'')+' '+(l.anuncio||'')).toLowerCase().includes(q));
 
     // El recordatorio de registrar la venta solo estorba en las bandejas donde no aplica
     document.getElementById('sellhint').style.display=['interesados','conversando','compraron','todos'].includes(bandeja)?'':'none';
@@ -975,11 +994,17 @@
     /* Etiqueta propia para los leads que llegaron por una promoción con fecha:
        el vendedor tiene que saberlo ANTES de repetirle el precio al cliente. */
     const tpromo=promo?'<span class="tag tpromo" title="Este lead vino de un anuncio de promoción">Promo · vence '+esc(promo)+'</span>':'';
-    /* Un lead nuevo que lleva días parado es lo único que de verdad urge avisar.
-       Solo se marca en los que nadie ha tocado: en los demás ya hubo contacto. */
+    /* Dos formas de que un lead se enfríe, y antes solo se avisaba una:
+       (a) nadie lo contactó nunca, y (b) SÍ lo contactaron y ahí quedó, sin avanzar
+       a califica/no califica. La (b) es la que más leads acumula —cientos— y era
+       invisible: un contactado de hace tres semanas se veía igual que uno de ayer. */
     const d=diasDe(l);
-    const aviso=(e==='created'&&d!=null&&d>=1)
-      ? '<b class="frio'+(d>=3?' mucho':'')+'">'+(d>=3?'sin contactar hace '+d+' días':'sin contactar')+'</b>' : '';
+    let aviso='';
+    if(e==='created' && d!=null && d>=1){
+      aviso='<b class="frio'+(d>=3?' mucho':'')+'">'+(d>=3?'sin contactar hace '+d+' días':'sin contactar')+'</b>';
+    } else if(e==='contacted' && d!=null && d>=5){
+      aviso='<b class="frio'+(d>=14?' mucho':'')+'">sin avanzar hace '+d+' días</b>';
+    }
     return '<div class="lead'+(nueva?' entra':'')+'" style="--i:'+orden+'" data-e="'+esc(e)+'"'+(aviso?' data-frio="1"':'')+'>'
       +'<div class="lhead"><div class="av">'+esc(ini)+'</div>'
         +'<div><h3>'+esc(nombre)+'</h3><div class="meta" title="'+esc(l.fecha||'')+'">'+hace(l)+aviso+'</div></div>'
