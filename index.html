@@ -475,7 +475,7 @@
           :'<div class="big"><div><b>'+money(c.spend)+'</b><span>Gasto</span></div><div><b>'+intf(c.leads)+'</b><span>Leads</span></div></div>';
         const st=isAw
           ?'<div class="st"><div><b>'+money(c.cpm)+'</b><span>CPM</span></div><div><b>'+c.freq.toFixed(2)+'</b><span>Frecuencia</span></div><div><b>'+intf(c.imp)+'</b><span>Impr.</span></div><div><b>'+c.ctr.toFixed(2)+'%</b><span>CTR</span></div></div>'
-          :'<div class="st"><div><b>'+(c.leads?money(c.spend/c.leads):'—')+'</b><span>CPL</span></div><div><b>'+c.ctr.toFixed(2)+'%</b><span>CTR</span></div><div><b>'+intf(c.imp)+'</b><span>Impr.</span></div><div><b>'+intf(c.reach)+'</b><span>Alcance</span></div></div>';
+          :'<div class="st"><div><b>'+(c.leads?money(c.spend/c.leads):'—')+'</b><span>Costo x lead</span></div><div><b>'+c.ctr.toFixed(2)+'%</b><span>CTR</span></div><div><b>'+intf(c.imp)+'</b><span>Impr.</span></div><div><b>'+intf(c.reach)+'</b><span>Alcance</span></div></div>';
         return '<div class="camp '+k[0]+'"><div class="cn">'+esc(k[1])+'</div><div class="cf">'+esc(c.name)+'</div>'+big+st+'</div>';}).join('')
         :'<div class="state">Sin datos en este rango.</div>';
       // Dona: gasto por campaña
