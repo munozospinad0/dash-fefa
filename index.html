@@ -48,6 +48,13 @@
   .kpi span{font-size:.66rem;opacity:.88;font-weight:600}
   .kpi b{font-size:clamp(1.45rem,2.5vw,1.9rem);font-weight:800;line-height:1;white-space:nowrap;letter-spacing:-.03em;display:block}
   .kpi b em{font-style:normal;font-size:1rem;opacity:.75}
+  /* Segundo nivel: el mismo dato de antes, pero sin gritar. Ocupa toda la fila
+     bajo las tres principales y se lee como una regleta de contexto. */
+  .kpi2row{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px;margin-top:2px}
+  .kpi2{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);border-radius:13px;padding:10px 12px;animation:rise .4s cubic-bezier(.2,.8,.2,1) both}
+  .kpi2 span{display:block;font-size:.6rem;opacity:.8;font-weight:700;letter-spacing:.02em;margin-bottom:3px}
+  .kpi2 b{font-size:.98rem;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+  .kpi2 b em{font-style:normal;font-size:.72rem;opacity:.75}
   @keyframes pop{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:none}}
 
   /* ================= LAYOUT ABIERTO ================= */
@@ -446,10 +453,15 @@
     const dp='preset='+encodeURIComponent(preset);
     api('level=account&'+dp).then(d=>{
       const a=d[0]||{}; const leads=leadsOf(a); const spend=Number(a.spend)||0;
-      const kpis=[['money','Gasto',money(spend)],['users','Leads',intf(leads)],['tag','CPL',leads?money(spend/leads):'—'],
-        ['click','CTR',(Number(a.ctr)||0).toFixed(2)+'<em>%</em>'],['layers','CPM',money(a.cpm)],['cursor','CPC',money(a.cpc)],
+      /* Están las mismas métricas de siempre, pero en dos niveles: arriba las tres que
+         se miran para decidir, y debajo el resto como contexto, en tarjetas chicas.
+         Antes las diez pesaban igual y "Frecuencia" competía con "Gasto". */
+      const kpis=[['money','Inversión',money(spend)],['users','Leads',intf(leads)],['tag','Costo por lead',leads?money(spend/leads):'—']];
+      const sec=[['click','CTR',(Number(a.ctr)||0).toFixed(2)+'<em>%</em>'],['layers','CPM',money(a.cpm)],['cursor','CPC',money(a.cpc)],
         ['cursor','Clics',intf(a.clicks)],['eye','Impresiones',intf(a.impressions)],['reach','Alcance',intf(a.reach)],['repeat','Frecuencia',(Number(a.frequency)||0).toFixed(2)]];
-      document.getElementById('kpis').innerHTML=kpis.map((k,i)=>'<div class="kpi" style="animation-delay:'+(i*40)+'ms"><div class="kt"><div class="ki">'+IC[k[0]]+'</div><span>'+k[1]+'</span></div><b>'+k[2]+'</b></div>').join('');
+      document.getElementById('kpis').innerHTML=
+        kpis.map((k,i)=>'<div class="kpi" style="animation-delay:'+(i*40)+'ms"><div class="kt"><div class="ki">'+IC[k[0]]+'</div><span>'+k[1]+'</span></div><b>'+k[2]+'</b></div>').join('')
+        +'<div class="kpi2row">'+sec.map((k,i)=>'<div class="kpi2" style="animation-delay:'+(120+i*35)+'ms"><span>'+k[1]+'</span><b>'+k[2]+'</b></div>').join('')+'</div>';
     }).catch(e=>{ document.getElementById('kpis').innerHTML='<div class="kpi"><b style="font-size:.9rem">'+esc(e.message)+'</b></div>'; });
 
     loadAudience(dp);
