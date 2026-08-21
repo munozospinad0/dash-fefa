@@ -338,18 +338,18 @@
 
   <section>
     <h2>Embudo de leads</h2>
-    <p class="sub">Estado de los leads en el CRM — al marcar qualified o converted se avisa a Meta</p>
+    <p class="sub">En qué punto está cada lead. Al marcarlo como <b>Califica</b> o <b>Convertido</b>, Meta lo recibe como conversión y aprende a buscar más gente así.</p>
     <div class="funnel" id="funnel"><div class="state" style="grid-column:1/-1"><div class="spin2"></div>Cargando…</div></div>
   </section>
 
   <section>
     <h2>Anuncios</h2>
-    <p class="sub">Top por gasto · toca cualquier fila para ver el anuncio real</p>
+    <p class="sub">Ordenados por inversión · toca cualquier fila para ver el anuncio tal como se publicó</p>
     <div class="qbox" id="qualityBox"></div>
     <div class="qalert" id="qualityAlert"></div>
     <div class="tcard">
-      <div class="twrap"><table id="adsTable"><thead><tr><th>Anuncio</th><th>Campaña</th><th class="r">Gasto</th><th class="r">Leads</th><th class="r">CPL</th><th class="r qh">Califican</th><th class="r qh">CPL calif.</th><th class="r qh qv">Vendido</th><th class="r qh qv">Retorno</th><th class="r">CTR</th><th class="r">Impr.</th><th class="r"></th></tr></thead><tbody><tr><td colspan="12"><div class="state" style="padding:20px">Cargando…</div></td></tr></tbody></table></div>
-      <div class="pvhint"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Toca un anuncio para ver su preview real de Facebook</div>
+      <div class="twrap"><table id="adsTable"><thead><tr><th>Anuncio</th><th>Campaña</th><th class="r">Inversión</th><th class="r">Leads</th><th class="r">Costo x lead</th><th class="r qh">Califican</th><th class="r qh">Costo x calificado</th><th class="r qh qv">Vendido</th><th class="r qh qv">Retorno</th><th class="r">CTR</th><th class="r">Impresiones</th><th class="r"></th></tr></thead><tbody><tr><td colspan="12"><div class="state" style="padding:20px">Cargando…</div></td></tr></tbody></table></div>
+      <div class="pvhint"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Toca un anuncio para verlo tal como se publicó en Facebook</div>
     </div>
   </section>
 
@@ -366,7 +366,7 @@
       <div class="filtros" id="filtros"></div>
       <button class="btn" id="refbtn" onclick="loadAll(true)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg> Actualizar</button>
     </div>
-    <div class="sellhint"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><div><b>¿El lead compró?</b> Toca <b>+ Registrar venta</b> en su tarjeta, escribe el monto en dólares y elige el producto. El lead pasa a <b>Convertido</b> y se calcula el <b>retorno (ROAS)</b> del anuncio que lo trajo.</div></div>
+    <div class="sellhint"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><div><b>¿El lead compró?</b> Toca <b>+ Registrar venta</b> en su tarjeta, escribe el monto en dólares y elige el producto. El lead pasa a <b>Convertido</b> y se calcula cuánto <b>devolvió</b> el anuncio que lo trajo.</div></div>
     <div id="content"><div class="state"><div class="spin2"></div>Cargando leads…</div></div>
   </section>
 </div>
@@ -656,7 +656,7 @@
       '<div class="qc"><span class="ql">Leads calificados</span><b>'+q+'</b>'+
         '<small>'+(q/n*100).toFixed(1)+'% de '+n+' recibidos</small></div>'+
       '<div class="qc hot"><span class="ql">Costo x lead calificado</span><b>'+cpq+'</b>'+
-        '<small>el CPL de '+cpl+' solo mide el formulario</small></div>'+
+        '<small>el costo por lead de '+cpl+' solo cuenta el formulario</small></div>'+
       (rev>0?
         '<div class="qc good"><span class="ql">Vendido</span><b>'+money(rev)+'</b>'+
           '<small>'+ventas+' venta'+(ventas===1?'':'s')+' · retorno '+(rev/gasto).toFixed(1)+'x</small></div>'+
